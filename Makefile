@@ -64,7 +64,7 @@ fix-style:
 #* Linting
 .PHONY: test
 test:
-	$(PYTHON) -m pytest -n auto -c pyproject.toml -v
+	$(PYTHON) -m pytest -n auto -c pyproject.toml -vv
 
 
 #* Remove

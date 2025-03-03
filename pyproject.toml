@@ -3,7 +3,7 @@ requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "intrinsic-qe"
+name = "wqeval"
 version = "0.1.0"
 description = "Intrinsic Quality Estimation for Neural Machine Translation"
 readme = "README.md"
@@ -11,12 +11,11 @@ requires-python = ">=3.10"
 license = {file = "LICENSE"}
 keywords = ["machine translation", "quality estimation", "natural language processing", "interpretability"]
 authors = [
-  {name = "Gabriele Sarti"},
-  {email = "gabriele.sarti996@gmail.com"}
+  {name = "Gabriele Sarti", email = "gabriele.sarti996@gmail.com"},
+  {name = "Vilém Zouhar", email = "vilem.zouhar@gmail.com"}
 ]
 maintainers = [
-  {name = "Gabriele Sarti"},
-  {email = "gabriele.sarti996@gmail.com"}
+  {name = "Gabriele Sarti", email = "gabriele.sarti996@gmail.com"}
 ]
 # Pypi classifiers: https://pypi.org/classifiers/
 classifiers = [
@@ -37,7 +36,6 @@ classifiers = [
   "Typing :: Typed"
 ]
 dependencies = [
-  "inseq>=0.6.0",
   "typer>=0.12.5",
   "jiwer>=3",
 ]
@@ -56,13 +54,13 @@ notebook = [
 ]
 
 [project.urls]
-homepage = "https://github.com/gsarti/intrinsic-qe"
-documentation = "https://TODO"
-repository = "https://github.com/gsarti/intrinsic-qe"
-changelog = "https://github.com/gsarti/intrinsic-qe/blob/main/CHANGELOG.md"
+homepage = "https://github.com/gsarti/wqeval"
+documentation = "https://github.com/gsarti/wqeval"
+repository = "https://github.com/gsarti/wqeval"
+changelog = "https://github.com/gsarti/wqeval/blob/main/CHANGELOG.md"
 
 [project.scripts]
-"intrinsic-qe" = "intrinsic_qe.commands.cli:app"
+"wqeval" = "wqeval.commands.cli:app"
 
 
 [tool.pytest.ini_options]
@@ -87,7 +85,7 @@ addopts = [
 
 
 [tool.setuptools]
-packages = ["intrinsic_qe"]
+packages = ["wqeval"]
 
 
 [tool.ruff]
@@ -111,7 +109,7 @@ exclude = [
 ]
 fix = true
 line-length = 119
-src = ["intrinsic_qe", "examples", "tests"]
+src = ["wqeval", "examples", "tests"]
 extend-include = ["*.ipynb"]
 
 [tool.ruff.lint]
@@ -146,7 +144,7 @@ select = [
   "PLW", # flake8-pylint
 ]
 per-file-ignores = { "__init__.py" = ["F401"], "**/examples/*" = ["B018", "E402"] }
-isort = { known-first-party = ["intrinsic_qe"], order-by-type = true}
+isort = { known-first-party = ["wqeval"], order-by-type = true}
 pylint = { max-branches = 22 }
 pyupgrade = { keep-runtime-typing = true }
 pydocstyle = { convention = "google" }
