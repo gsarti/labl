@@ -49,27 +49,23 @@ class WordLevelQEDataset(AlignedSequencesMixin):
 
     @staticmethod
     def from_sentences(
-        mt: Sequence[str],
-        pe: Sequence[str] | None = None,
-        src: Sequence[str] | None = None,
+        orig: str | Sequence[str],
+        edit: str | Sequence[str] | None = None,
     ) -> "WordLevelQEDataset":
         """Load a dataset from lists of machine translations, with optional source and post-edit sentences."""
-        mt = list(mt)
+        orig = list(orig)
+        edit = list(edit) if edit is not None else None
         _aligned_word = None
         _aligned_char = None
-        if pe is not None:
-            pe = list(pe)
+        if edit is not None:
             _aligned_word = process_words(
-                mt, pe, reference_transform=regex_wordsplit, hypothesis_transform=regex_wordsplit
+                orig, edit, reference_transform=regex_wordsplit, hypothesis_transform=regex_wordsplit
             )
-            _aligned_char = process_characters(mt, pe)
+            _aligned_char = process_characters(orig, edit)
         data_list = []
-        for idx, mt_i in enumerate(mt):
-            src_i = None
-            pe_i = None
-            if pe is not None and idx < len(pe):
-                pe_i = pe[idx]
-            if src is not None and idx < len(src):
-                src_i = src[idx]
-            data_list.append(WordLevelQEEntry(mt=mt_i, pe=pe_i, src=src_i))
+        for idx, orig_i in enumerate(orig):
+            edit_i = None
+            if edit is not None and idx < len(edit):
+                edit_i = edit[idx]
+            data_list.append(WordLevelQEEntry(orig=orig_i, edit=edit_i))
         return WordLevelQEDataset(data_list, _aligned_word=_aligned_word, _aligned_char=_aligned_char)

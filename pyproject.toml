@@ -66,6 +66,7 @@ changelog = "https://github.com/gsarti/wqeval/blob/main/CHANGELOG.md"
 [tool.pytest.ini_options]
 # https://docs.pytest.org/en/6.2.x/customize.html#pyproject-toml
 # Directories that are not visited by pytest collector:
+pythonpath = ["wqeval"]
 testpaths = "tests"
 python_files = "test_*.py"
 norecursedirs =["hooks", "*.egg", ".eggs", "dist", "build", "docs", ".tox", ".git", "__pycache__"]
