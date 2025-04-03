@@ -1,7 +1,7 @@
 default_language_version:
   python: python3
 
-default_stages: [commit, push]
+default_stages: [pre-commit, pre-push]
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -9,8 +9,10 @@ repos:
     hooks:
       - id: trailing-whitespace
       - id: check-yaml
+        exclude: mkdocs.yml # Non-standard syntax for pymdownx not supported
       - id: check-added-large-files
         args: ['--maxkb=2500']
+      - id: check-docstring-first
       - id: check-toml
       - id: check-merge-conflict
       - id: mixed-line-ending
@@ -19,7 +21,7 @@ repos:
         exclude: LICENSE
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.9.9
+    rev: v0.11.0
     hooks:
       - id: ruff-format
       - id: ruff
@@ -36,5 +38,14 @@ repos:
         name: clean
         entry: make
         args: ["clean"]
+        language: system
+        pass_filenames: false
+
+  - repo: local
+    hooks:
+      - id: docs
+        name: build docs
+        entry: make
+        args: ["build-docs"]
         language: system
         pass_filenames: false

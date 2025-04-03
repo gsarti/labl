@@ -13,6 +13,10 @@ help:
 	@echo "check-style     : run checks on all files without fixing them."
 	@echo "fix-style       : run checks on files and potentially modifies them."
 	@echo "test            : run all tests."
+	@echo "build-docs      : build mkdocs documentation."
+	@echo "serve-docs      : serve documentation locally."
+	@echo "deploy-docs     : deploy documentation to https://gsarti.com/wqe (gh-pages branch)"
+	@echo "docs            : shortcut to build and serve generated documentation locally."
 	@echo "clean           : cleans all unecessary files."
 
 #* UV
@@ -66,6 +70,22 @@ fix-style:
 test:
 	$(PYTHON) -m pytest -n auto -c pyproject.toml -vv
 
+
+#* Docs
+.PHONY: build-docs
+build-docs:
+	make uv-activate && mkdocs build
+
+.PHONY: serve-docs
+serve-docs:
+	make uv-activate && mkdocs serve
+
+.PHONY: deploy-docs
+deploy-docs:
+	make uv-activate && mkdocs gh-deploy
+
+.PHONY: docs
+docs: build-docs serve-docs
 
 #* Remove
 .PHONY: pycache-remove

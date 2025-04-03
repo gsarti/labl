@@ -3,9 +3,9 @@ requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "wqeval"
+name = "wqe"
 version = "0.1.0"
-description = "Intrinsic Quality Estimation for Neural Machine Translation"
+description = "Word-level Quality Estimation Toolkit"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {file = "LICENSE"}
@@ -21,10 +21,9 @@ maintainers = [
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
-  "Environment :: GPU",
-  "Environment :: GPU :: NVIDIA CUDA",
   "Framework :: Jupyter",
   "Intended Audience :: Science/Research",
+  "Intended Audience :: Developers",
   "License :: OSI Approved :: Apache Software License",
   "Operating System :: OS Independent",
   "Programming Language :: Python",
@@ -32,41 +31,50 @@ classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
-  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Scientific/Engineering :: Visualization",
   "Typing :: Typed"
 ]
 dependencies = [
-  "typer>=0.12.5",
-  "jiwer>=3",
+  "typer>=0.15.2",
+  "jiwer>=3.1.0",
 ]
 
 [project.optional-dependencies]
-
+docs = [
+  "mkdocs>=1.6.1",
+  "mkdocs-material>=9.5.34",
+  "mkdocs-autorefs>=1.1.0",
+  "mkdocs-section-index>=0.3.9",
+  "mkdocstrings>=0.25.2",
+  "mkdocstrings-python>=1.10.9",
+  "mknotebooks>=0.8.0",
+  "docstr-coverage>=2.3.2",
+]
 lint = [
-  "pre-commit>=2.19.0",
-  "pytest>=7.2.0",
-  "pytest-xdist>=3.5.0",
-  "ruff>=0.2.0"
+  "pre-commit>=4.2.0",
+  "pytest>=8.3.5",
+  "pytest-xdist>=3.6.1",
+  "ruff>=0.11.0"
 ]
 notebook = [
-  "ipykernel>=6.29.2",
-  "ipywidgets>=8.1.2"
+  "ipykernel>=6.29.5",
+  "ipywidgets>=8.1.5"
 ]
 
 [project.urls]
-homepage = "https://github.com/gsarti/wqeval"
-documentation = "https://github.com/gsarti/wqeval"
-repository = "https://github.com/gsarti/wqeval"
-changelog = "https://github.com/gsarti/wqeval/blob/main/CHANGELOG.md"
+homepage = "https://github.com/gsarti/wqe"
+documentation = "https://github.com/gsarti/wqe"
+repository = "https://github.com/gsarti/wqe"
+changelog = "https://github.com/gsarti/wqe/blob/main/CHANGELOG.md"
 
 [project.scripts]
-"wqeval" = "wqeval.commands.cli:app"
+"wqe" = "wqe.commands.cli:app"
 
 
 [tool.pytest.ini_options]
 # https://docs.pytest.org/en/6.2.x/customize.html#pyproject-toml
 # Directories that are not visited by pytest collector:
-pythonpath = ["wqeval"]
+pythonpath = ["wqe"]
 testpaths = "tests"
 python_files = "test_*.py"
 norecursedirs =["hooks", "*.egg", ".eggs", "dist", "build", "docs", ".tox", ".git", "__pycache__"]
@@ -86,7 +94,7 @@ addopts = [
 
 
 [tool.setuptools]
-packages = ["wqeval"]
+packages = ["wqe"]
 
 
 [tool.ruff]
@@ -110,7 +118,7 @@ exclude = [
 ]
 fix = true
 line-length = 119
-src = ["wqeval", "examples", "tests"]
+src = ["wqe", "examples", "tests"]
 extend-include = ["*.ipynb"]
 
 [tool.ruff.lint]
@@ -145,7 +153,7 @@ select = [
   "PLW", # flake8-pylint
 ]
 per-file-ignores = { "__init__.py" = ["F401"], "**/examples/*" = ["B018", "E402"] }
-isort = { known-first-party = ["wqeval"], order-by-type = true}
+isort = { known-first-party = ["wqe"], order-by-type = true}
 pylint = { max-branches = 22 }
 pyupgrade = { keep-runtime-typing = true }
 pydocstyle = { convention = "google" }
