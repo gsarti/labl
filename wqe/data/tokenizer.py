@@ -4,79 +4,15 @@ import logging
 import re
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
-from dataclasses import dataclass
 from typing import Literal, cast, overload
 
 from jiwer import AbstractTransform, Compose, ReduceToListOfListOfWords, Strip
-from transformers import AutoTokenizer
 from transformers.tokenization_utils import BatchEncoding, PreTrainedTokenizer
 from transformers.tokenization_utils_fast import PreTrainedTokenizerFast
 
+from wqe.data.transform import SPLIT_REGEX, ReduceToListOfListOfTokens, RegexReduceToListOfListOfWords
+
 logger = logging.getLogger(__name__)
-
-SPLIT_REGEX = r"[\w']+|[.,!?:;'”#$%&\(\)\*\+-/<=>@\[\]^_`{|}~\"]"
-
-
-class RegexReduceToListOfListOfWords(ReduceToListOfListOfWords):
-    """Version of `ReduceToListOfWords` using Regex for splitting.
-
-    Args:
-        exp (str): The Regex expression to use for splitting.
-            Defaults to `r"[\\w']+|[.,!?:;'”#$%&\\(\\)\\*\\+-/<=>@\\[\\]^_{|}~\"]`.
-            This regex keeps words (including contractions) together as single tokens,
-            and treats each punctuation mark or special character as its own separate token.
-    """
-
-    def __init__(self, exp: str = SPLIT_REGEX):
-        """
-        Args:
-            exp: the Regex expression to use for splitting."
-        """
-        self.exp = exp
-
-    def process_string(self, s: str):
-        return [[m.group(0) for m in re.finditer(self.exp, s) if len(m.group(0)) >= 1]]
-
-
-class ReduceToListOfListOfTokens(ReduceToListOfListOfWords):
-    """Version of `ReduceToListOfWords` using a tokenizer from the `transformers` library.
-
-    Args:
-        tokenizer_or_id (str | PreTrainedTokenizer | PreTrainedTokenizerFast): The tokenizer or its ID.
-            If a string is provided, it will be used to load the tokenizer from the `transformers` library.
-        add_special_tokens (bool): Whether to add special tokens to the tokenized output. Defaults to False.
-        has_bos_token (bool): Whether the tokenizer sets a beginning-of-sequence token. Defaults to True.
-        has_eos_token (bool): Whether the tokenizer sets an end-of-sequence token. Defaults to True.
-    """
-
-    def __init__(
-        self,
-        tokenizer_or_id: str | PreTrainedTokenizer | PreTrainedTokenizerFast,
-        add_special_tokens: bool = False,
-        has_bos_token: bool = True,
-        has_eos_token: bool = True,
-        **kwargs,
-    ):
-        self.add_special_tokens = add_special_tokens
-        if isinstance(tokenizer_or_id, str):
-            self.tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast = AutoTokenizer.from_pretrained(
-                tokenizer_or_id, use_fast=True, **kwargs
-            )
-        else:
-            if kwargs:
-                logger.warning(f"Ignoring additional keyword arguments for tokenizer initialization: {kwargs}.")
-            self.tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast = tokenizer_or_id
-        self.has_bos_token = has_bos_token
-        self.has_eos_token = has_eos_token
-
-    def process_string(self, s: str):
-        if self.add_special_tokens:
-            ids: list[int] = self.tokenizer(text_target=s).input_ids
-            tokens = self.tokenizer.convert_ids_to_tokens(ids)
-            tokens = cast(list[str], tokens)
-            return [tokens]
-        tokens = self.tokenizer.tokenize(s)
-        return [tokens]
 
 
 class Tokenizer(ABC):
@@ -184,7 +120,9 @@ class WhitespaceTokenizer(Tokenizer):
             tokens = [tokens]
         return [tok_transform.word_delimiter.join(sentence) for sentence in tokens]
 
-    def tokenize_with_offsets(self, texts: str | list[str]) -> tuple[list[list[str]], list[list[tuple[int, int]]]]:
+    def tokenize_with_offsets(
+        self, texts: str | list[str]
+    ) -> tuple[list[list[str]], list[list[tuple[int, int] | None]]]:
         """Tokenizes the input texts and returns the character spans of the tokens.
 
         Args:
@@ -200,7 +138,7 @@ class WhitespaceTokenizer(Tokenizer):
             texts = [texts]
         tokens = self.transform(texts)
         tokens = cast(list[list[str]], tokens)
-        char_spans: list[list[tuple[int, int]]] = []
+        char_spans = []
         for sentence in tokens:
             sentence_spans = []
             start = 0
@@ -358,51 +296,3 @@ class HuggingfaceTokenizer(Tokenizer):
             all_tokens.append(tokens)
             all_char_spans.append(char_spans)
         return all_tokens, all_char_spans
-
-
-LabeledTokenInput = (
-    list[tuple[str, str | None]] | list[tuple[str, int | None]] | list[tuple[str, float | None]] | list["LabeledToken"]
-)
-
-
-@dataclass
-class LabeledToken:
-    """Class for a token with an associated label.
-
-    Attributes:
-        token (str): The token. Can be accessed using `.t`.
-        label (str | int | float | None): The label associated with the token. Can be accessed using `.l`.
-    """
-
-    token: str
-    label: str | int | float | None
-
-    def __str__(self):
-        return f"({self.token}, {self.label})"
-
-    @property
-    def t(self):
-        return self.token
-
-    @property
-    def l(self):  # noqa: E743
-        return self.label
-
-    def to_tuple(self):
-        return (self.token, self.label)
-
-    @classmethod
-    def from_tuple(cls, tup: tuple[str, str | int | float | None]):
-        return cls(*tup)
-
-    @classmethod
-    def from_list(cls, lst: LabeledTokenInput) -> list["LabeledToken"]:
-        out = []
-        for item in lst:
-            if isinstance(item, tuple):
-                out.append(cls.from_tuple(item))
-            elif isinstance(item, LabeledToken):
-                out.append(item)
-            else:
-                raise TypeError(f"Invalid type for LabeledToken input. Expected tuple, got {type(item)}.")
-        return out

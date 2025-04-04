@@ -1,8 +1,9 @@
 from tqdm import tqdm
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
 
-from wqe.data.qe_span import QESpan
-from wqe.data.tokenizer import LabeledTokenInput, Tokenizer
+from wqe.data.span import Span
+from wqe.data.token import LabeledTokenInput
+from wqe.data.tokenizer import Tokenizer
 from wqe.data.wqe_entry import WQEEntry
 
 
@@ -71,7 +72,7 @@ class WQEDataset:
     def from_spans(
         cls,
         texts: list[str],
-        spans: list[list[QESpan]] | list[list[dict[str, str | int | float | None]]],
+        spans: list[list[Span]] | list[list[dict[str, str | int | float | None]]],
         tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
         tokenizer_kwargs: dict = {},
     ) -> "WQEDataset":
@@ -80,7 +81,7 @@ class WQEDataset:
         Args:
             texts (list[str]):
                 The set of text.
-            spans (list[list[QESpan]] | list[list[dict[str, str | int | float | None]]]):
+            spans (list[list[Span]] | list[list[dict[str, str | int | float | None]]]):
                 A list of spans for each text.
             tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A
                 [jiwer transform](https://jitsi.github.io/jiwer/reference/transforms/#transforms)
@@ -140,11 +141,13 @@ class WQEDataset:
     @classmethod
     def from_tokens(
         cls,
-        tokens: list[LabeledTokenInput],
+        labeled_tokens: list[LabeledTokenInput] | None = None,
         keep_labels: list[str] = [],
         ignore_labels: list[str] = [],
         tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
         tokenizer_kwargs: dict = {},
+        tokens: list[list[str]] | None = None,
+        labels: list[list[str | int | float | None]] | None = None,
     ) -> "WQEDataset":
         """Create a `WQEDataset` from a set of tokenized texts.
 
@@ -158,16 +161,29 @@ class WQEDataset:
                 used for tokenization. Supports initialization from a `transformers.PreTrainedTokenizer`, and uses
                 whitespace tokenization by default.
             tokenizer_kwargs (dict): Additional arguments for the tokenizer.
+            tokens (list[list[str]] | None):
+                A list of lists of tokens. Can be provided together with `labels` as an alternative to `labeled_tokens`.
+            labels (list[list[str | int | float | None]] | None):
+                A list of lists of labels for the tokens. Can be provided together with `tokens` as an alternative to
+                `labeled_tokens`.
         """
+        if labeled_tokens is not None:
+            num_sequences = len(labeled_tokens)
+        elif tokens is not None and labels is not None:
+            num_sequences = len(tokens)
+        else:
+            raise ValueError("Either `labeled_tokens` or both `tokens` and `labels` must be provided.")
         return cls(
             [
                 WQEEntry.from_tokens(
-                    text,
+                    labeled_tokens=labeled_tokens[idx] if labeled_tokens is not None else None,  # type: ignore
                     keep_labels=keep_labels,
                     ignore_labels=ignore_labels,
                     tokenizer=tokenizer,
                     tokenizer_kwargs=tokenizer_kwargs,
+                    tokens=tokens[idx] if tokens is not None else None,
+                    labels=labels[idx] if labels is not None else None,
                 )
-                for text in tqdm(tokens, desc="Creating WQEDataset", total=len(tokens), unit="#")
+                for idx in tqdm(range(num_sequences), desc="Creating WQEDataset", total=num_sequences, unit="#")
             ]
         )

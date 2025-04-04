@@ -37,6 +37,7 @@ classifiers = [
 dependencies = [
   "typer>=0.15.2",
   "jiwer>=3.1.0",
+  "transformers>=4.42.0",
 ]
 
 [project.optional-dependencies]

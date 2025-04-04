@@ -2,7 +2,7 @@
 
 ## 🔀 Mixins
 
-::: wqe.data.aligned_mixin.AlignedSequencesMixin
+::: wqe.data.mixins.AlignedSequencesMixin
     handler: python
     options:
       show_root_heading: true
@@ -15,7 +15,7 @@
 
 ## 🔤 Spans
 
-::: wqe.data.qe_span.AbstractSpan
+::: wqe.data.span.BaseSpan
     handler: python
     options:
       show_root_heading: true
@@ -25,13 +25,13 @@
       - from_list
       - to_dict
 
-::: wqe.data.qe_span.QESpan
+::: wqe.data.span.Span
     handler: python
     options:
       show_root_heading: true
       show_source: true
 
-::: wqe.data.qe_span.QESpanWithEdit
+::: wqe.data.span.EditSpan
     handler: python
     options:
       show_root_heading: true
@@ -39,7 +39,7 @@
 
 ## 🔠 Tokens
 
-::: wqe.data.tokenizer.LabeledToken
+::: wqe.data.token.LabeledToken
     handler: python
     options:
       show_root_heading: true
@@ -49,15 +49,21 @@
       - from_tuple
       - from_list
 
+::: wqe.data.token.LabeledTokenList
+    handler: python
+    options:
+      show_root_heading: true
+      show_source: false
+
 ## 🔄 Transforms
 
-::: wqe.data.tokenizer.RegexReduceToListOfListOfWords
+::: wqe.data.transform.RegexReduceToListOfListOfWords
     handler: python
     options:
       show_root_heading: true
       show_source: true
 
-::: wqe.data.tokenizer.ReduceToListOfListOfTokens
+::: wqe.data.transform.ReduceToListOfListOfTokens
     handler: python
     options:
       show_root_heading: true

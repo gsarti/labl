@@ -3,14 +3,14 @@ from dataclasses import dataclass
 from typing import Generic, TypeVar
 
 DictSpan = dict[str, str | int | float | None]
-QESpanInput = Sequence["QESpan"] | Sequence[DictSpan]
-QESpanWithEditInput = Sequence["QESpanWithEdit"] | Sequence[tuple[DictSpan, DictSpan]]
+QESpanInput = Sequence["Span"] | Sequence[DictSpan]
+QESpanWithEditInput = Sequence["EditSpan"] | Sequence[tuple[DictSpan, DictSpan]]
 
-SpanType = TypeVar("SpanType", bound="AbstractSpan")
+SpanType = TypeVar("SpanType", bound="BaseSpan")
 LoadFromType = TypeVar("LoadFromType", bound=DictSpan | tuple[DictSpan, DictSpan])
 
 
-class AbstractSpan(Generic[LoadFromType]):
+class BaseSpan(Generic[LoadFromType]):
     """Base class for spans.
     This class provides a common interface for spans and allows for easy conversion
     between different representations (e.g., dict, tuple).
@@ -24,7 +24,7 @@ class AbstractSpan(Generic[LoadFromType]):
     def to_dict(self) -> dict:
         """Converts the span to a dictionary."""
         return {
-            k: v if not isinstance(v, AbstractSpan) else v.to_dict()
+            k: v if not isinstance(v, BaseSpan) else v.to_dict()
             for k, v in self.__dict__.items()
             if not k.startswith("_")
         }
@@ -48,20 +48,20 @@ class AbstractSpan(Generic[LoadFromType]):
         """
         out = []
         for item in data:
-            if isinstance(item, AbstractSpan):
+            if isinstance(item, BaseSpan):
                 out.append(item)
             elif isinstance(item, cls._load_from_type):
                 out.append(cls.load(item))
             else:
                 raise TypeError(
                     f"Invalid input type. Expected {str(cls._load_from_type)} or object inheriting from "
-                    f"AbstractSpan, got {type(item)}."
+                    f"BaseSpan, got {type(item)}."
                 )
         return out
 
 
 @dataclass
-class QESpan(AbstractSpan[DictSpan]):
+class Span(BaseSpan[DictSpan]):
     """Class representing a span in a text.
 
     Attributes:
@@ -78,19 +78,19 @@ class QESpan(AbstractSpan[DictSpan]):
 
 
 @dataclass
-class QESpanWithEdit(AbstractSpan[tuple[DictSpan, DictSpan]]):
+class EditSpan(BaseSpan[tuple[DictSpan, DictSpan]]):
     """Class representing a pair of spans connecting a text with an edit.
     Attributes:
-        orig (QESpan): The span over the original text.
-        edit (QESpan): The span over the edited text.
+        orig (Span): The span over the original text.
+        edit (Span): The span over the edited text.
     """
 
-    orig: QESpan
-    edit: QESpan
+    orig: Span
+    edit: Span
     _load_from_type: type = tuple
 
     @classmethod
-    def load(cls, data: tuple[DictSpan, DictSpan]) -> "QESpanWithEdit":
-        orig = QESpan.load(data[0]) if isinstance(data[0], dict) else data[0]
-        edit = QESpan.load(data[1]) if isinstance(data[1], dict) else data[1]
+    def load(cls, data: tuple[DictSpan, DictSpan]) -> "EditSpan":
+        orig = Span.load(data[0]) if isinstance(data[0], dict) else data[0]
+        edit = Span.load(data[1]) if isinstance(data[1], dict) else data[1]
         return cls(orig, edit)

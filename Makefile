@@ -46,7 +46,7 @@ install:
 
 .PHONY: install-dev
 install-dev:
-	make uv-activate && uv pip install -r requirements-dev.txt && pre-commit install && pre-commit autoupdate
+	make uv-activate && uv pip install -r requirements-dev.txt && pre-commit install && pre-commit autoupdate && uv pip install -e .
 
 
 .PHONY: update-deps

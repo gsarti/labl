@@ -57,7 +57,12 @@ executing==2.2.0
 fastjsonschema==2.21.1
     # via nbformat
 filelock==3.18.0
-    # via virtualenv
+    # via
+    #   huggingface-hub
+    #   transformers
+    #   virtualenv
+fsspec==2025.3.2
+    # via huggingface-hub
 ghp-import==2.1.0
     # via mkdocs
 gitdb==4.0.12
@@ -66,6 +71,10 @@ gitpython==3.1.44
     # via mknotebooks
 griffe==1.7.2
     # via mkdocstrings-python
+huggingface-hub==0.30.1
+    # via
+    #   tokenizers
+    #   transformers
 identify==2.6.9
     # via pre-commit
 idna==3.10
@@ -180,12 +189,16 @@ nest-asyncio==1.6.0
     # via ipykernel
 nodeenv==1.9.1
     # via pre-commit
+numpy==2.2.4
+    # via transformers
 packaging==24.2
     # via
+    #   huggingface-hub
     #   ipykernel
     #   mkdocs
     #   nbconvert
     #   pytest
+    #   transformers
 paginate==0.5.7
     # via mkdocs-material
 pandocfilters==1.5.1
@@ -236,11 +249,13 @@ python-dateutil==2.9.0.post0
 pyyaml==6.0.2
     # via
     #   docstr-coverage
+    #   huggingface-hub
     #   mkdocs
     #   mkdocs-get-deps
     #   pre-commit
     #   pymdown-extensions
     #   pyyaml-env-tag
+    #   transformers
 pyyaml-env-tag==0.1
     # via mkdocs
 pyzmq==26.3.0
@@ -253,8 +268,13 @@ referencing==0.36.2
     # via
     #   jsonschema
     #   jsonschema-specifications
+regex==2024.11.6
+    # via transformers
 requests==2.32.3
-    # via mkdocs-material
+    # via
+    #   huggingface-hub
+    #   mkdocs-material
+    #   transformers
 rich==14.0.0
     # via typer
 rpds-py==0.24.0
@@ -263,6 +283,8 @@ rpds-py==0.24.0
     #   referencing
 ruff==0.11.3
     # via wqe (pyproject.toml)
+safetensors==0.5.3
+    # via transformers
 shellingham==1.5.4
     # via typer
 six==1.17.0
@@ -275,6 +297,8 @@ stack-data==0.6.3
     # via ipython
 tinycss2==1.4.0
     # via bleach
+tokenizers==0.21.1
+    # via transformers
 tomli==2.2.1
     # via pytest
 tornado==6.4.2
@@ -282,7 +306,10 @@ tornado==6.4.2
     #   ipykernel
     #   jupyter-client
 tqdm==4.67.1
-    # via docstr-coverage
+    # via
+    #   docstr-coverage
+    #   huggingface-hub
+    #   transformers
 traitlets==5.14.3
     # via
     #   comm
@@ -295,11 +322,14 @@ traitlets==5.14.3
     #   nbclient
     #   nbconvert
     #   nbformat
+transformers==4.50.3
+    # via wqe (pyproject.toml)
 typer==0.15.2
     # via wqe (pyproject.toml)
 typing-extensions==4.13.1
     # via
     #   beautifulsoup4
+    #   huggingface-hub
     #   ipython
     #   mistune
     #   mkdocstrings-python
