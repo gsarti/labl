@@ -5,13 +5,13 @@ from textwrap import dedent, indent
 from typing import Literal, cast, overload
 from warnings import warn
 
-from jiwer import AbstractTransform, CharacterOutput, Compose, WordOutput, process_characters, process_words
+from jiwer import CharacterOutput, WordOutput, process_characters, process_words
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
 
-from wqe.data.mixins.aligned_mixin import AlignedSequencesMixin
+from wqe.data.mixin import AlignedSequencesMixin
 from wqe.data.span import EditSpan, QESpanInput, QESpanWithEditInput, Span
 from wqe.data.token import LabeledToken, LabeledTokenInput, LabeledTokenList
-from wqe.data.tokenizer import HuggingfaceTokenizer, Tokenizer, WhitespaceTokenizer
+from wqe.data.tokenizer import Tokenizer, WhitespaceTokenizer, get_tokenizer
 
 logger = getLogger(__name__)
 
@@ -42,14 +42,13 @@ class WQEEntry(AlignedSequencesMixin):
             contains a tokenized version of `text` with text or numeric labels for each token.
         edits_tokens (list[LabeledTokenList]): List where the i-th element contains a tokenized version of the i-th
             edit in `edits` with text or numeric labels for each token.
-        tokenizer (jiwer.AbstractTransform | jiwer.Compose): A [jiwer transform](https://jitsi.github.io/jiwer/reference/transforms/#transforms)
-            used for tokenization if `tokens` or `edits_tokens` are not provided. Supports initialization from a
-            Huggingface tokenizer, and uses whitespace tokenization by default (`jiwer.Compose([jiwer.Strip(), jiwer.ReduceToListOfListOfWords()])`).
         aligned (list[WordOutput] | None): If one or more edits are provided, this is a list of aligned WordOutputs
             (one per edit) tokenized using the provided tokenizer. The alignment is done using the `jiwer` library.
         aligned_char (list[CharacterOutput] | None): If one or more edits are provided, this is a list of aligned
             CharacterOutputs (one per edit). The alignment is done using the `jiwer` library.
     """
+
+    __constructor_key = object()
 
     def __init__(
         self,
@@ -57,16 +56,16 @@ class WQEEntry(AlignedSequencesMixin):
         spans: list[Span] | list[list[EditSpan]],
         tagged: str | list[str],
         tokens: LabeledTokenList | list[LabeledTokenList],
-        tokenizer: Tokenizer,
         edits: list[str] | None = None,
         edits_tagged: list[str] | None = None,
         edits_tokens: list[LabeledTokenList] | None = None,
         aligned: list[WordOutput] | None = None,
         aligned_char: list[CharacterOutput] | None = None,
+        constructor_key: object | None = None,
     ):
         """Private constructor for `WQEEntry`.
 
-        The default constructor for `WQEEntry` is private. A `WQEEntry` can be initialized from:
+        A `WQEEntry` can be initialized from:
 
         * A `tagged` text, e.g. `Hello <error>world</error>!`, using `WQEEntry.from_tagged(tagged=...)`.
 
@@ -80,7 +79,24 @@ class WQEEntry(AlignedSequencesMixin):
             ('!', 0)]`, or two separate lists of `tokens` and `labels` using `WQEEntry.from_tokens(labeled_tokens=...)`
             or `WQEEntry.from_tokens(tokens=..., labels=)`.
         """
-        self.tokenizer = tokenizer
+        if constructor_key != self.__constructor_key:
+            raise RuntimeError(
+                dedent("""\
+                The default constructor for `WQEEntry` is private. A `WQEEntry` can be initialized from:
+
+                * A `tagged` text, e.g. `Hello <error>world</error>!`, using `WQEEntry.from_tagged(tagged=...)`.
+
+                * A `text` and one or more `edits`, e.g. `Hello world!` and `["Goodbye world!", "Hello planet!"]`, using
+                    `WQEEntry.from_edits(text=..., edits=...)`.
+
+                * A `text` and a list of labeled `spans`, e.g. `Hello world!` and `[{'start': 0, 'end': 5, 'label': 'error'}]`,
+                    using `WQEEntry.from_spans(text=..., spans=...)`.
+
+                * A list of `labeled_tokens` with string/numeric labels, e.g. `[('Hel', 0.5), ('lo', 0.7), ('world', 1),
+                    ('!', 0)]`, or two separate lists of `tokens` and `labels` using `WQEEntry.from_tokens(labeled_tokens=...)`
+                    or `WQEEntry.from_tokens(tokens=..., labels=)`.
+                """)
+            )
         self._text = text
         self._spans = spans
         self._tagged = tagged
@@ -188,7 +204,7 @@ class WQEEntry(AlignedSequencesMixin):
                 whitespace tokenization by default.
             tokenizer_kwargs (dict): Additional arguments for the tokenizer.
         """
-        tokenizer = cls._get_tokenizer(tokenizer, tokenizer_kwargs)
+        tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
         edits = [edits] if isinstance(edits, str) else edits
         aligned: list[WordOutput] | None = []
         aligned_char: list[CharacterOutput] | None = []
@@ -213,12 +229,12 @@ class WQEEntry(AlignedSequencesMixin):
             spans=spans,
             tagged=tagged,
             tokens=tokens,
-            tokenizer=tokenizer,
             edits=edits,
             edits_tagged=edits_tagged,
             edits_tokens=edits_tokens,
             aligned=aligned,
             aligned_char=aligned_char,
+            constructor_key=cls.__constructor_key,
         )
 
     @classmethod
@@ -242,7 +258,7 @@ class WQEEntry(AlignedSequencesMixin):
                 whitespace tokenization by default.
             tokenizer_kwargs (dict): Additional arguments for the tokenizer.
         """
-        tokenizer = cls._get_tokenizer(tokenizer, tokenizer_kwargs)
+        tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
         spans = Span.from_list(spans)
         tokens = cls.get_tokens_from_spans(texts=text, spans=spans, tokenizer=tokenizer)[0]
         tagged = cls.get_tagged_from_spans(texts=text, spans=spans)[0]
@@ -251,7 +267,7 @@ class WQEEntry(AlignedSequencesMixin):
             spans=spans,
             tagged=tagged,
             tokens=tokens,
-            tokenizer=tokenizer,
+            constructor_key=cls.__constructor_key,
         )
 
     @classmethod
@@ -279,7 +295,7 @@ class WQEEntry(AlignedSequencesMixin):
                 are kept (Default: []).
             tokenizer_kwargs (dict): Additional arguments for the tokenizer.
         """
-        tokenizer = cls._get_tokenizer(tokenizer, tokenizer_kwargs)
+        tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
         text, spans = cls.get_text_and_spans_from_tagged(tagged=tagged, keep_tags=keep_tags, ignore_tags=ignore_tags)
         tokens = cls.get_tokens_from_spans(texts=text, spans=spans, tokenizer=tokenizer)[0]
         return cls(
@@ -287,7 +303,7 @@ class WQEEntry(AlignedSequencesMixin):
             spans=spans,
             tagged=tagged,
             tokens=tokens,
-            tokenizer=tokenizer,
+            constructor_key=cls.__constructor_key,
         )
 
     @classmethod
@@ -358,9 +374,9 @@ class WQEEntry(AlignedSequencesMixin):
             if len(tokens) != len(labels):
                 raise RuntimeError("The length of `tokens` and `labels` must be the same. ")
             labeled_tokens = [(tok, lab) for tok, lab in zip(tokens, labels, strict=True)]  # type: ignore
-        labeled_tokens = LabeledToken.from_list(labeled_tokens, keep_labels=keep_labels, ignore_labels=ignore_labels)
+        labeled_tokens = LabeledToken.from_list(labeled_tokens, keep_labels=keep_labels, ignore_labels=ignore_labels)  # type: ignore
         labeled_tokens = cast(LabeledTokenList, labeled_tokens)
-        tokenizer = cls._get_tokenizer(tokenizer, tokenizer_kwargs)
+        tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
         text = tokenizer.detokenize([tok.t for tok in labeled_tokens])[0]
         spans = cls.get_spans_from_tokens(text, labeled_tokens, tokenizer, keep_labels, ignore_labels)
         tagged = cls.get_tagged_from_spans(text, spans=cls._format_spans(spans))[0]
@@ -369,7 +385,7 @@ class WQEEntry(AlignedSequencesMixin):
             spans=spans,
             tagged=tagged,
             tokens=labeled_tokens,
-            tokenizer=tokenizer,
+            constructor_key=cls.__constructor_key,
         )
 
     ### Helper Functions ###
@@ -421,27 +437,6 @@ class WQEEntry(AlignedSequencesMixin):
         # Filter out empty span that could be produced by insertions/deletions on the other text
         all_spans = [[span for span in span_list if span.label is not None] for span_list in all_spans]
         return all_spans
-
-    @staticmethod
-    def _get_tokenizer(
-        tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
-        tokenizer_kwargs: dict = {},
-    ) -> Tokenizer:
-        if tokenizer is None:
-            return WhitespaceTokenizer()
-        if isinstance(tokenizer, Tokenizer):
-            return tokenizer
-        if isinstance(tokenizer, str | PreTrainedTokenizer | PreTrainedTokenizerFast):
-            return HuggingfaceTokenizer(tokenizer, **tokenizer_kwargs)
-        if isinstance(tokenizer, AbstractTransform | Compose):
-            raise RuntimeError(
-                "Jiwer transform are supported by defining classes specifying an additional decoding method."
-                "See wqe.data.tokenizer.WhitespaceTokenizer or wqe.data.tokenizer.WordBoundaryTokenizer for examples."
-            )
-        raise RuntimeError(
-            "Invalid tokenizer type. Expected str, Tokenizer or transformers.PreTrainedTokenizer, "
-            f"got {type(tokenizer).__name__}."
-        )
 
     ### Formatting Methods ###
 

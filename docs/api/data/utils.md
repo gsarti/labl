@@ -2,7 +2,7 @@
 
 ## 🔀 Mixins
 
-::: wqe.data.mixins.AlignedSequencesMixin
+::: wqe.data.mixin.AlignedSequencesMixin
     handler: python
     options:
       show_root_heading: true

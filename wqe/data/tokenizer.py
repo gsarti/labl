@@ -1,18 +1,15 @@
 """Classes for tokenizing and detokenizing text."""
 
-import logging
 import re
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
-from typing import Literal, cast, overload
+from typing import cast
 
 from jiwer import AbstractTransform, Compose, ReduceToListOfListOfWords, Strip
 from transformers.tokenization_utils import BatchEncoding, PreTrainedTokenizer
 from transformers.tokenization_utils_fast import PreTrainedTokenizerFast
 
 from wqe.data.transform import SPLIT_REGEX, ReduceToListOfListOfTokens, RegexReduceToListOfListOfWords
-
-logger = logging.getLogger(__name__)
 
 
 class Tokenizer(ABC):
@@ -30,29 +27,21 @@ class Tokenizer(ABC):
     def __init__(self, transform: AbstractTransform | Compose):
         self.transform = transform
 
-    @overload
-    def __call__(self, texts: str | list[str], output_char_spans: Literal[False]) -> list[list[str]]: ...
-
-    @overload
     def __call__(
-        self, texts: str | list[str], output_char_spans: Literal[True]
-    ) -> tuple[list[list[str]], list[list[tuple[int, int] | None]]]: ...
-
-    def __call__(
-        self, texts: str | list[str], output_char_spans: bool = False
+        self, texts: str | list[str], with_offsets: bool = False
     ) -> list[list[str]] | tuple[list[list[str]], Sequence[Sequence[tuple[int, int] | None]]]:
         """Tokenizes one or more input strings.
 
         Args:
             texts (str | list[str]): The strings to tokenize.
-            output_char_spans (bool): If True, returns the character spans of the tokens.
+            with_offsets (bool): If True, returns the (start, end) character indices of the tokens.
                 If False, returns only the tokens.
 
         Returns:
             The tokens of the input strings, and optionally the character spans of the tokens.
 
         """
-        return self.tokenize(texts) if not output_char_spans else self.tokenize_with_offsets(texts)
+        return self.tokenize(texts) if not with_offsets else self.tokenize_with_offsets(texts)
 
     def tokenize(self, texts: str | list[str]) -> list[list[str]]:
         """Tokenizes one or more input texts.
@@ -296,3 +285,24 @@ class HuggingfaceTokenizer(Tokenizer):
             all_tokens.append(tokens)
             all_char_spans.append(char_spans)
         return all_tokens, all_char_spans
+
+
+def get_tokenizer(
+    tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
+    tokenizer_kwargs: dict = {},
+) -> Tokenizer:
+    if tokenizer is None:
+        return WhitespaceTokenizer()
+    if isinstance(tokenizer, Tokenizer):
+        return tokenizer
+    if isinstance(tokenizer, str | PreTrainedTokenizer | PreTrainedTokenizerFast):
+        return HuggingfaceTokenizer(tokenizer, **tokenizer_kwargs)
+    if isinstance(tokenizer, AbstractTransform | Compose):
+        raise RuntimeError(
+            "Jiwer transform are supported by defining classes specifying an additional decoding method."
+            "See wqe.data.tokenizer.WhitespaceTokenizer or wqe.data.tokenizer.WordBoundaryTokenizer for examples."
+        )
+    raise RuntimeError(
+        "Invalid tokenizer type. Expected str, Tokenizer or transformers.PreTrainedTokenizer, "
+        f"got {type(tokenizer).__name__}."
+    )

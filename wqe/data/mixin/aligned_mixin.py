@@ -1,29 +1,12 @@
-from jiwer import AbstractTransform, CharacterOutput, Compose, WordOutput, process_characters, process_words
+from jiwer import CharacterOutput, WordOutput
 from jiwer.alignment import _construct_comparison_string
 
 
 class AlignedSequencesMixin:
-    """Base class for handling sequences alignment using the [`jiwer`](https://jitsi.github.io/jiwer/) library.
+    """Base class for handling sequences alignment using the [`jiwer`](https://jitsi.github.io/jiwer/) library."""
 
-    Args:
-        text (str): The original text.
-        edits (list[str]): A list of one or more edited strings.
-        transform (AbstractTransform | Compose): A transform or compose object to apply to the text.
-    """
-
-    def __init__(self, text: str, edits: list[str], transform: AbstractTransform | Compose) -> None:
-        self._aligned: list[WordOutput] | None = []
-        self._aligned_char: list[CharacterOutput] | None = []
-        for edit in edits:
-            aligned_tok = process_words(
-                text,
-                edit,
-                reference_transform=transform,
-                hypothesis_transform=transform,
-            )
-            self._aligned.append(aligned_tok)
-            aligned_char = process_characters(text, edit)
-            self._aligned_char.append(aligned_char)
+    _aligned: list[WordOutput] | None = []
+    _aligned_char: list[CharacterOutput] | None = []
 
     def __rich__(self):
         if self._aligned is None:
