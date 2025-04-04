@@ -63,7 +63,7 @@ class LabeledTokenList(list[LabeledToken]):
     """Class for a list of `LabeledToken`, with custom visualization."""
 
     def __str__(self) -> str:
-        lengths = [max(len(str(t.t)), len(str(t.l))) for t in self]
+        lengths = [max(len(str(t.t)), len(str(t.l))) if t.l is not None else len(str(t.t)) for t in self]
         txt_toks = " ".join(f"{tok.t:<{tok_len}}" for tok, tok_len in zip(self, lengths, strict=True)) + "\n"
         txt_labels = (
             " ".join(
@@ -72,3 +72,10 @@ class LabeledTokenList(list[LabeledToken]):
             + "\n"
         )
         return txt_toks + txt_labels
+
+
+class ListOfListsOfLabeledToken(list[LabeledTokenList]):
+    """Class for a list of lists of `LabeledToken`, with custom visualization."""
+
+    def __str__(self) -> str:
+        return "\n".join(str(lst) for lst in self)

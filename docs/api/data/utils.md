@@ -55,6 +55,12 @@
       show_root_heading: true
       show_source: false
 
+::: wqe.data.token.ListOfListsOfLabeledToken
+    handler: python
+    options:
+      show_root_heading: true
+      show_source: false
+
 ## 🔄 Transforms
 
 ::: wqe.data.transform.RegexReduceToListOfListOfWords

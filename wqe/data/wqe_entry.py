@@ -10,7 +10,7 @@ from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
 
 from wqe.data.mixin import AlignedSequencesMixin
 from wqe.data.span import EditSpan, QESpanInput, QESpanWithEditInput, Span
-from wqe.data.token import LabeledToken, LabeledTokenInput, LabeledTokenList
+from wqe.data.token import LabeledToken, LabeledTokenInput, LabeledTokenList, ListOfListsOfLabeledToken
 from wqe.data.tokenizer import Tokenizer, WhitespaceTokenizer, get_tokenizer
 
 logger = getLogger(__name__)
@@ -37,10 +37,10 @@ class WQEEntry(AlignedSequencesMixin):
             are provided, `tagged` is a list where the i-th element contains the tagged version of `text` with
             information from the i-th edit in `edits`.
         edits_tagged (list[str]): Tagged version of `edits` containing information from `spans`, if present.
-        tokens (LabeledTokenList | list[LabeledTokenList]): Tokenized variant of `text` with text or numeric
+        tokens (LabeledTokenList | ListOfListsOfLabeledToken): Tokenized variant of `text` with text or numeric
             labels for each token. If multiple edits are provided, `tokens` is a list where the i-th element
             contains a tokenized version of `text` with text or numeric labels for each token.
-        edits_tokens (list[LabeledTokenList]): List where the i-th element contains a tokenized version of the i-th
+        edits_tokens (ListOfListsOfLabeledToken): List where the i-th element contains a tokenized version of the i-th
             edit in `edits` with text or numeric labels for each token.
         aligned (list[WordOutput] | None): If one or more edits are provided, this is a list of aligned WordOutputs
             (one per edit) tokenized using the provided tokenizer. The alignment is done using the `jiwer` library.
@@ -55,10 +55,10 @@ class WQEEntry(AlignedSequencesMixin):
         text: str,
         spans: list[Span] | list[list[EditSpan]],
         tagged: str | list[str],
-        tokens: LabeledTokenList | list[LabeledTokenList],
+        tokens: LabeledTokenList | ListOfListsOfLabeledToken,
         edits: list[str] | None = None,
         edits_tagged: list[str] | None = None,
-        edits_tokens: list[LabeledTokenList] | None = None,
+        edits_tokens: ListOfListsOfLabeledToken | None = None,
         aligned: list[WordOutput] | None = None,
         aligned_char: list[CharacterOutput] | None = None,
         constructor_key: object | None = None,
@@ -166,19 +166,19 @@ class WQEEntry(AlignedSequencesMixin):
         raise RuntimeError("Cannot set the tagged edited texts after initialization")
 
     @property
-    def tokens(self) -> LabeledTokenList | list[LabeledTokenList] | None:
+    def tokens(self) -> LabeledTokenList | ListOfListsOfLabeledToken | None:
         return self._tokens
 
     @tokens.setter
-    def tokens(self, t: LabeledTokenList | None):
+    def tokens(self, t: LabeledTokenList | ListOfListsOfLabeledToken | None):
         raise RuntimeError("Cannot set the tokenized text after initialization")
 
     @property
-    def edits_tokens(self) -> list[LabeledTokenList] | None:
+    def edits_tokens(self) -> ListOfListsOfLabeledToken | None:
         return self._edits_tokens
 
     @edits_tokens.setter
-    def edits_tokens(self, t: list[LabeledTokenList] | None):
+    def edits_tokens(self, t: ListOfListsOfLabeledToken | None):
         raise RuntimeError("Cannot set the tokenized edited text after initialization")
 
     ### Constructors ###
@@ -557,7 +557,7 @@ class WQEEntry(AlignedSequencesMixin):
         texts: str | list[str],
         spans: list[Span] | list[list[Span]],
         tokenizer: Tokenizer | None = None,
-    ) -> list[LabeledTokenList]:
+    ) -> ListOfListsOfLabeledToken:
         """Convert spans to tokens.
 
         Args:
@@ -576,12 +576,14 @@ class WQEEntry(AlignedSequencesMixin):
             tokenizer = WhitespaceTokenizer()
         all_str_tokens, all_offsets = tokenizer.tokenize_with_offsets(texts)
         if not spans:
-            out = [LabeledTokenList([LabeledToken(tok, None) for tok in str_tokens]) for str_tokens in all_str_tokens]
+            out = ListOfListsOfLabeledToken(
+                LabeledTokenList([LabeledToken(tok, None) for tok in str_tokens]) for str_tokens in all_str_tokens
+            )
             return out
         if not isinstance(spans[0], list):
             spans = [spans]  # type: ignore
         spans = cast(list[list[Span]], spans)
-        all_labeled_tokens = []
+        all_labeled_tokens = ListOfListsOfLabeledToken()
         for tokens, offsets, l_spans in zip(all_str_tokens, all_offsets, spans, strict=True):
             labeled_tokens = LabeledTokenList()
             sorted_l_spans = sorted(l_spans, key=lambda s: s.start)
