@@ -1,9 +1,12 @@
+from typing import Any, cast
+
 from tqdm import tqdm
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
+from transformers.utils import is_pandas_available
 
 from wqe.data.span import Span
 from wqe.data.token import LabeledTokenInput
-from wqe.data.tokenizer import Tokenizer
+from wqe.data.tokenizer import Tokenizer, get_tokenizer
 from wqe.data.wqe_entry import WQEEntry
 
 
@@ -48,22 +51,21 @@ class WQEDataset:
                 The set of text.
             edits (list[str] | list[list[str]] | None):
                 One or more edited version for each text.
-            tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A
-                [jiwer transform](https://jitsi.github.io/jiwer/reference/transforms/#transforms)
+            tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A `Tokenizer`
                 used for tokenization. Supports initialization from a `transformers.PreTrainedTokenizer`, and uses
                 whitespace tokenization by default.
             tokenizer_kwargs (dict): Additional arguments for the tokenizer.
         """
+        tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
         return cls(
             [
                 WQEEntry.from_edits(
                     text,
                     edit,
                     tokenizer=tokenizer,
-                    tokenizer_kwargs=tokenizer_kwargs,
                 )
                 for text, edit in tqdm(
-                    zip(texts, edits, strict=True), desc="Creating WQEDataset", total=len(texts), unit="#"
+                    zip(texts, edits, strict=True), desc="Creating WQEDataset", total=len(texts), unit="entries"
                 )
             ]
         )
@@ -83,22 +85,21 @@ class WQEDataset:
                 The set of text.
             spans (list[list[Span]] | list[list[dict[str, str | int | float | None]]]):
                 A list of spans for each text.
-            tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A
-                [jiwer transform](https://jitsi.github.io/jiwer/reference/transforms/#transforms)
+            tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A `Tokenizer`
                 used for tokenization. Supports initialization from a `transformers.PreTrainedTokenizer`, and uses
                 whitespace tokenization by default.
             tokenizer_kwargs (dict): Additional arguments for the tokenizer.
         """
+        tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
         return cls(
             [
                 WQEEntry.from_spans(
                     text,
                     span,
                     tokenizer=tokenizer,
-                    tokenizer_kwargs=tokenizer_kwargs,
                 )
                 for text, span in tqdm(
-                    zip(texts, spans, strict=True), desc="Creating WQEDataset", total=len(texts), unit="#"
+                    zip(texts, spans, strict=True), desc="Creating WQEDataset", total=len(texts), unit="entries"
                 )
             ]
         )
@@ -117,14 +118,14 @@ class WQEDataset:
         Args:
             tagged (list[str]):
                 The set of tagged text.
-            tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A
-                [jiwer transform](https://jitsi.github.io/jiwer/reference/transforms/#transforms)
+            tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A `Tokenizer`
                 used for tokenization. Supports initialization from a `transformers.PreTrainedTokenizer`, and uses
                 whitespace tokenization by default.
             keep_tags (list[str]): A list of tags to keep.
             ignore_tags (list[str]): A list of tags to ignore.
             tokenizer_kwargs (dict): Additional arguments for the tokenizer.
         """
+        tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
         return cls(
             [
                 WQEEntry.from_tagged(
@@ -132,9 +133,8 @@ class WQEDataset:
                     tokenizer=tokenizer,
                     keep_tags=keep_tags,
                     ignore_tags=ignore_tags,
-                    tokenizer_kwargs=tokenizer_kwargs,
                 )
-                for text in tqdm(tagged, desc="Creating WQEDataset", total=len(tagged), unit="#")
+                for text in tqdm(tagged, desc="Creating WQEDataset", total=len(tagged), unit="entries")
             ]
         )
 
@@ -156,8 +156,7 @@ class WQEDataset:
                 A list of lists containing labeled tokens in the form of tuples (token, label) or `LabeledToken` objects.
             keep_labels (list[str]): A list of labels to keep.
             ignore_labels (list[str]): A list of labels to ignore.
-            tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A
-                [jiwer transform](https://jitsi.github.io/jiwer/reference/transforms/#transforms)
+            tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A `Tokenizer`
                 used for tokenization. Supports initialization from a `transformers.PreTrainedTokenizer`, and uses
                 whitespace tokenization by default.
             tokenizer_kwargs (dict): Additional arguments for the tokenizer.
@@ -173,6 +172,7 @@ class WQEDataset:
             num_sequences = len(tokens)
         else:
             raise ValueError("Either `labeled_tokens` or both `tokens` and `labels` must be provided.")
+        tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
         return cls(
             [
                 WQEEntry.from_tokens(
@@ -180,10 +180,65 @@ class WQEDataset:
                     keep_labels=keep_labels,
                     ignore_labels=ignore_labels,
                     tokenizer=tokenizer,
-                    tokenizer_kwargs=tokenizer_kwargs,
                     tokens=tokens[idx] if tokens is not None else None,
                     labels=labels[idx] if labels is not None else None,
                 )
-                for idx in tqdm(range(num_sequences), desc="Creating WQEDataset", total=num_sequences, unit="#")
+                for idx in tqdm(range(num_sequences), desc="Creating WQEDataset", total=num_sequences, unit="entries")
             ]
+        )
+
+        ### Loaders ###
+
+    @classmethod
+    def from_edits_dataframe(
+        cls,
+        df,
+        text_column: str,
+        edit_column: str,
+        entry_ids: str | list[str],
+        tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
+        tokenizer_kwargs: dict[str, Any] = {},
+    ) -> "WQEDataset":
+        """Create a `WQEDataset` from a `pandas.DataFrame` with edits.
+
+        Every row in the DataFrame is an entry identified univocally by `entry_ids`. The `text_column` contains the
+        original text, and the `edit_column` contains the edits. If multiple columns with the same `entry_ids` are
+        present, they are all treated as edits of the same text.
+
+        Args:
+            df (pandas.DataFrame): The DataFrame containing the text and edits.
+            text_column (str): The name of the column in the dataframe containing the original text.
+            edit_column (str): The name of the column in the dataframe containing the edited text.
+            entry_ids (str | list[str]): One or more column names acting as unique identifiers for each entry. If
+                multiple entries are found with the same `entry_ids`, they are all treated as edits of the same text.
+            tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None, optional): A `Tokenizer`
+                used for tokenization. Supports initialization from a `transformers.PreTrainedTokenizer`, and uses
+                whitespace tokenization by default.
+            tokenizer_kwargs (dict[str, Any], optional): _description_. Defaults to {}.
+
+        Returns:
+            A `WQEDataset` initialized from the set of texts and edits.
+        """
+        if not is_pandas_available():
+            raise ImportError("Pandas is not installed. Please install pandas to use this function.")
+        import pandas as pd
+
+        tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
+        df = cast(pd.DataFrame, df)
+        grouped_dfs = df.groupby(entry_ids).size().reset_index()
+        all_texts = []
+        all_edits = []
+        for _, entry_row in tqdm(
+            grouped_dfs.iterrows(), desc="Extracting texts and edits", total=len(grouped_dfs), unit="entries"
+        ):
+            curr_vals = [entry_row[col] for col in entry_ids]
+            selected_rows = df[(df[entry_ids] == curr_vals).all(axis=1)]
+            text = selected_rows[text_column].tolist()[0]
+            edits = selected_rows[edit_column].tolist()
+            all_texts.append(text)
+            all_edits.append(edits)
+        return WQEDataset.from_edits(
+            all_texts,
+            all_edits,
+            tokenizer=tokenizer,
         )

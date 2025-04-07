@@ -1,5 +1,6 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pprint import pformat
 from typing import Generic, TypeVar
 
 DictSpan = dict[str, str | int | float | None]
@@ -37,7 +38,7 @@ class BaseSpan(Generic[LoadFromType]):
         return cls(**data)
 
     @classmethod
-    def from_list(cls: type[SpanType], data: Sequence[SpanType | LoadFromType]) -> list[SpanType]:
+    def from_list(cls: type[SpanType], data: Sequence[SpanType | LoadFromType]) -> "SpanList[SpanType]":
         """Creates a list of span instances from a sequence of spans and/or primitive types.
 
         Args:
@@ -46,7 +47,7 @@ class BaseSpan(Generic[LoadFromType]):
         Returns:
             A list of span instances.
         """
-        out = []
+        out = SpanList()
         for item in data:
             if isinstance(item, BaseSpan):
                 out.append(item)
@@ -94,3 +95,17 @@ class EditSpan(BaseSpan[tuple[DictSpan, DictSpan]]):
         orig = Span.load(data[0]) if isinstance(data[0], dict) else data[0]
         edit = Span.load(data[1]) if isinstance(data[1], dict) else data[1]
         return cls(orig, edit)
+
+
+class SpanList(list[SpanType]):
+    """Class for a list of `Span`, with custom visualization."""
+
+    def __str__(self):
+        return pformat(self, indent=4)
+
+
+class ListOfListsOfSpans(list[SpanList[SpanType]]):
+    """Class for a list of lists of `Span`, with custom visualization."""
+
+    def __str__(self) -> str:
+        return "\n".join(str(lst) for lst in self)

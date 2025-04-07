@@ -15,3 +15,5 @@
         - get_tokens_from_spans
         - get_text_and_spans_from_tagged
         - get_spans_from_tokens
+        - token_labels_summary
+        - span_labels_summary

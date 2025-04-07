@@ -8,8 +8,9 @@ from warnings import warn
 from jiwer import CharacterOutput, WordOutput, process_characters, process_words
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
 
+from wqe.data.aggregation import LabelAggregation, label_count_aggregation
 from wqe.data.mixin import AlignedSequencesMixin
-from wqe.data.span import EditSpan, QESpanInput, QESpanWithEditInput, Span
+from wqe.data.span import EditSpan, ListOfListsOfSpans, QESpanInput, QESpanWithEditInput, Span, SpanList
 from wqe.data.token import LabeledToken, LabeledTokenInput, LabeledTokenList, ListOfListsOfLabeledToken
 from wqe.data.tokenizer import Tokenizer, WhitespaceTokenizer, get_tokenizer
 
@@ -28,7 +29,7 @@ class WQEEntry(AlignedSequencesMixin):
         text (str):
             The original text.
         edits (list[str] | None):
-            One or more edited version of the text. If only the text was provided, this will be set to None.
+            One or more edited version of the text. Set only if the entry was created from one or more edits.
         spans (list[Span] | list[list[EditSpan]]): If only `text` is specified, `spans` is a list of
             `Span` items containing information about specific spans in `text`. If one or more `edits` are provided,
             `spans` is a list where the i-th element contains a list `EditSpan` with information about `text` and
@@ -36,29 +37,38 @@ class WQEEntry(AlignedSequencesMixin):
         tagged (str | list[str]): Tagged version of `text` containing information from `spans`. If multiple edits
             are provided, `tagged` is a list where the i-th element contains the tagged version of `text` with
             information from the i-th edit in `edits`.
-        edits_tagged (list[str]): Tagged version of `edits` containing information from `spans`, if present.
-        tokens (LabeledTokenList | ListOfListsOfLabeledToken): Tokenized variant of `text` with text or numeric
+        tokens (list[LabeledToken] | list[list[LabeledToken]]): Tokenized variant of `text` with text or numeric
             labels for each token. If multiple edits are provided, `tokens` is a list where the i-th element
             contains a tokenized version of `text` with text or numeric labels for each token.
-        edits_tokens (ListOfListsOfLabeledToken): List where the i-th element contains a tokenized version of the i-th
-            edit in `edits` with text or numeric labels for each token.
+        tokens_offsets (list[tuple[int, int] | None]): Offsets for each token in `tokens`. Initialized automatically
+            when `tokens` is created. The i-th element corresponds to the i-th token in `tokens`.
+        edits_tagged (list[str] | None): Tagged versions (one per edit) of `edits` containing information from `spans`.
+            Set only if the entry was created from one or more edits.
+        edits_tokens (list[list[LabeledToken]] | None): List where the i-th element corresponds to a list of tokens for
+            the corresponding edit in `edits` with text or numeric labels for each token. Set only if the entry was
+            created from one or more edits.
+        edits_tokens_offsets (list[list[tuple[int, int] | None]] | None): If edits are provided, for every list of
+            `edit_tokens` this contains a list with the offsets for each token.
         aligned (list[WordOutput] | None): If one or more edits are provided, this is a list of aligned WordOutputs
             (one per edit) tokenized using the provided tokenizer. The alignment is done using the `jiwer` library.
         aligned_char (list[CharacterOutput] | None): If one or more edits are provided, this is a list of aligned
             CharacterOutputs (one per edit). The alignment is done using the `jiwer` library.
     """
 
+    # Private constructor key to prevent direct instantiation
     __constructor_key = object()
 
     def __init__(
         self,
         text: str,
-        spans: list[Span] | list[list[EditSpan]],
+        spans: SpanList[Span] | ListOfListsOfSpans[EditSpan],
         tagged: str | list[str],
         tokens: LabeledTokenList | ListOfListsOfLabeledToken,
+        tokens_offsets: list[tuple[int, int] | None],
         edits: list[str] | None = None,
         edits_tagged: list[str] | None = None,
         edits_tokens: ListOfListsOfLabeledToken | None = None,
+        edits_tokens_offsets: list[list[tuple[int, int] | None]] | None = None,
         aligned: list[WordOutput] | None = None,
         aligned_char: list[CharacterOutput] | None = None,
         constructor_key: object | None = None,
@@ -101,9 +111,11 @@ class WQEEntry(AlignedSequencesMixin):
         self._spans = spans
         self._tagged = tagged
         self._tokens = tokens
+        self._tokens_offsets = tokens_offsets
         self._edits = edits
         self._edits_tagged = edits_tagged
         self._edits_tokens = edits_tokens
+        self._edits_tokens_offsets = edits_tokens_offsets
         self._aligned = aligned
         self._aligned_char = aligned_char
 
@@ -120,9 +132,6 @@ class WQEEntry(AlignedSequencesMixin):
         {indent(tokens_str, 7 * " ")}
         """)
 
-    def __repr__(self) -> str:
-        return self.__str__()
-
     ### Getters and Setters ###
 
     @property
@@ -138,24 +147,40 @@ class WQEEntry(AlignedSequencesMixin):
         return self._edits
 
     @edits.setter
-    def edits(self, t: str):
+    def edits(self, t: list[str]):
         raise RuntimeError("Cannot set the edited text after initialization")
 
     @property
-    def spans(self) -> list[Span] | list[list[EditSpan]] | None:
+    def spans(self) -> SpanList[Span] | ListOfListsOfSpans[EditSpan]:
         return self._spans
 
     @spans.setter
-    def spans(self, s: list[Span] | list[list[EditSpan]] | None):
+    def spans(self, s: SpanList[Span] | ListOfListsOfSpans[EditSpan]):
         raise RuntimeError("Cannot set the spans after initialization")
 
     @property
-    def tagged(self) -> str | list[str] | None:
+    def tagged(self) -> str | list[str]:
         return self._tagged
 
     @tagged.setter
-    def tagged(self, t: str | None):
+    def tagged(self, t: str | list[str]):
         raise RuntimeError("Cannot set the tagged text after initialization")
+
+    @property
+    def tokens(self) -> LabeledTokenList | ListOfListsOfLabeledToken:
+        return self._tokens
+
+    @tokens.setter
+    def tokens(self, t: LabeledTokenList | ListOfListsOfLabeledToken):
+        raise RuntimeError("Cannot set the tokenized text after initialization")
+
+    @property
+    def tokens_offsets(self) -> list[tuple[int, int] | None]:
+        return self._tokens_offsets
+
+    @tokens_offsets.setter
+    def tokens_offsets(self, t: list[tuple[int, int] | None]):
+        raise RuntimeError("Cannot set the tokenized text offsets after initialization")
 
     @property
     def edits_tagged(self) -> list[str] | None:
@@ -166,20 +191,20 @@ class WQEEntry(AlignedSequencesMixin):
         raise RuntimeError("Cannot set the tagged edited texts after initialization")
 
     @property
-    def tokens(self) -> LabeledTokenList | ListOfListsOfLabeledToken | None:
-        return self._tokens
-
-    @tokens.setter
-    def tokens(self, t: LabeledTokenList | ListOfListsOfLabeledToken | None):
-        raise RuntimeError("Cannot set the tokenized text after initialization")
-
-    @property
     def edits_tokens(self) -> ListOfListsOfLabeledToken | None:
         return self._edits_tokens
 
     @edits_tokens.setter
     def edits_tokens(self, t: ListOfListsOfLabeledToken | None):
         raise RuntimeError("Cannot set the tokenized edited text after initialization")
+
+    @property
+    def edits_tokens_offsets(self) -> list[list[tuple[int, int] | None]] | None:
+        return self._edits_tokens_offsets
+
+    @edits_tokens_offsets.setter
+    def edits_tokens_offsets(self, t: list[list[tuple[int, int] | None]] | None):
+        raise RuntimeError("Cannot set the tokenized edited text offsets after initialization")
 
     ### Constructors ###
 
@@ -198,8 +223,7 @@ class WQEEntry(AlignedSequencesMixin):
                 The original text.
             edits (str | list[str] | None):
                 One or more edited version of the text.
-            tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A
-                [jiwer transform](https://jitsi.github.io/jiwer/reference/transforms/#transforms)
+            tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A `Tokenizer`
                 used for tokenization. Supports initialization from a `transformers.PreTrainedTokenizer`, and uses
                 whitespace tokenization by default.
             tokenizer_kwargs (dict): Additional arguments for the tokenizer.
@@ -222,16 +246,20 @@ class WQEEntry(AlignedSequencesMixin):
         f_edit_spans = cls._format_spans(spans, span_type=EditSpan, text_type="edit")
         tagged = cls.get_tagged_from_spans(texts=[text for _ in edits], spans=f_orig_spans)
         edits_tagged = cls.get_tagged_from_spans(texts=edits, spans=f_edit_spans)
-        tokens = cls.get_tokens_from_spans([text for _ in edits], f_orig_spans, tokenizer=tokenizer)
-        edits_tokens = cls.get_tokens_from_spans(edits, f_edit_spans, tokenizer=tokenizer)
+        tokens, offsets = cls.get_tokens_and_offsets_from_spans(
+            [text for _ in edits], f_orig_spans, tokenizer=tokenizer
+        )
+        edits_tokens, edits_offsets = cls.get_tokens_and_offsets_from_spans(edits, f_edit_spans, tokenizer=tokenizer)
         return cls(
             text=text,
             spans=spans,
             tagged=tagged,
             tokens=tokens,
+            tokens_offsets=offsets[0],
             edits=edits,
             edits_tagged=edits_tagged,
             edits_tokens=edits_tokens,
+            edits_tokens_offsets=edits_offsets,
             aligned=aligned,
             aligned_char=aligned_char,
             constructor_key=cls.__constructor_key,
@@ -252,21 +280,21 @@ class WQEEntry(AlignedSequencesMixin):
                 The original text.
             spans (list[Span] | list[dict[str, str | int | float]]):
                 A list of `Span` items containing information about specific spans in `text`.
-            tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A
-                [jiwer transform](https://jitsi.github.io/jiwer/reference/transforms/#transforms)
+            tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A `Tokenizer`
                 used for tokenization. Supports initialization from a `transformers.PreTrainedTokenizer`, and uses
                 whitespace tokenization by default.
             tokenizer_kwargs (dict): Additional arguments for the tokenizer.
         """
         tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
         spans = Span.from_list(spans)
-        tokens = cls.get_tokens_from_spans(texts=text, spans=spans, tokenizer=tokenizer)[0]
+        tokens, offsets = cls.get_tokens_and_offsets_from_spans(texts=text, spans=spans, tokenizer=tokenizer)
         tagged = cls.get_tagged_from_spans(texts=text, spans=spans)[0]
         return cls(
             text=text,
             spans=spans,
             tagged=tagged,
-            tokens=tokens,
+            tokens=tokens[0],
+            tokens_offsets=offsets[0],
             constructor_key=cls.__constructor_key,
         )
 
@@ -283,8 +311,7 @@ class WQEEntry(AlignedSequencesMixin):
 
         Args:
             tagged (str): Tagged version of `text` containing information from `spans`.
-            tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A
-                [jiwer transform](https://jitsi.github.io/jiwer/reference/transforms/#transforms)
+            tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A `Tokenizer`
                 used for tokenization. Supports initialization from a `transformers.PreTrainedTokenizer`, and uses
                 whitespace tokenization by default.
             keep_tags (list[str]):
@@ -297,12 +324,13 @@ class WQEEntry(AlignedSequencesMixin):
         """
         tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
         text, spans = cls.get_text_and_spans_from_tagged(tagged=tagged, keep_tags=keep_tags, ignore_tags=ignore_tags)
-        tokens = cls.get_tokens_from_spans(texts=text, spans=spans, tokenizer=tokenizer)[0]
+        tokens, offsets = cls.get_tokens_and_offsets_from_spans(texts=text, spans=spans, tokenizer=tokenizer)
         return cls(
             text=text,
             spans=spans,
             tagged=tagged,
-            tokens=tokens,
+            tokens=tokens[0],
+            tokens_offsets=offsets[0],
             constructor_key=cls.__constructor_key,
         )
 
@@ -322,8 +350,7 @@ class WQEEntry(AlignedSequencesMixin):
         Args:
             labeled_tokens (list[tuple[str, str]] | list[tuple[str, int]] | list[tuple[str, float]] | list[LabeledToken]):
                 Tokenized variant of `text` with text or numeric labels for each token.
-            tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A
-                [jiwer transform](https://jitsi.github.io/jiwer/reference/transforms/#transforms)
+            tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A `Tokenizer`
                 used for tokenization. Supports initialization from a `transformers.PreTrainedTokenizer`, and uses
                 whitespace tokenization by default.
             keep_labels (list[str]):
@@ -378,13 +405,15 @@ class WQEEntry(AlignedSequencesMixin):
         labeled_tokens = cast(LabeledTokenList, labeled_tokens)
         tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
         text = tokenizer.detokenize([tok.t for tok in labeled_tokens])[0]
-        spans = cls.get_spans_from_tokens(text, labeled_tokens, tokenizer, keep_labels, ignore_labels)
+        _, offsets = tokenizer.tokenize_with_offsets(text)
+        spans = cls.get_spans_from_tokens(text, labeled_tokens, offsets[0], tokenizer, keep_labels, ignore_labels)
         tagged = cls.get_tagged_from_spans(text, spans=cls._format_spans(spans))[0]
         return cls(
             text=text,
             spans=spans,
             tagged=tagged,
             tokens=labeled_tokens,
+            tokens_offsets=offsets[0],
             constructor_key=cls.__constructor_key,
         )
 
@@ -442,13 +471,13 @@ class WQEEntry(AlignedSequencesMixin):
 
     @overload
     @staticmethod
-    def get_spans_from_edits(text: str, edits: str, aligned: CharacterOutput | None) -> list[EditSpan]: ...
+    def get_spans_from_edits(text: str, edits: str, aligned: CharacterOutput | None) -> SpanList[EditSpan]: ...
 
     @overload
     @staticmethod
     def get_spans_from_edits(
         text: str, edits: list[str], aligned: list[CharacterOutput] | None
-    ) -> list[list[EditSpan]]: ...
+    ) -> ListOfListsOfSpans[EditSpan]: ...
 
     @staticmethod
     def get_spans_from_edits(
@@ -458,7 +487,7 @@ class WQEEntry(AlignedSequencesMixin):
         sub_tag: str = "S",
         ins_tag: str = "I",
         del_tag: str = "D",
-    ) -> list[EditSpan] | list[list[EditSpan]]:
+    ) -> SpanList[EditSpan] | ListOfListsOfSpans[EditSpan]:
         """Convert edits to spans over a text and its edits.
 
         Args:
@@ -483,9 +512,9 @@ class WQEEntry(AlignedSequencesMixin):
             aligned_outputs = [aligned]
         else:
             aligned_outputs = aligned
-        all_spans = []
+        all_spans: ListOfListsOfSpans[EditSpan] = ListOfListsOfSpans()
         for edit, char_aligned_out in zip(edits, aligned_outputs, strict=True):
-            edit_spans = []
+            edit_spans: SpanList[EditSpan] = SpanList()
             for aligned_span in char_aligned_out.alignments[0]:
                 params_orig = {
                     "start": aligned_span.ref_start_idx,
@@ -553,21 +582,21 @@ class WQEEntry(AlignedSequencesMixin):
         return tagged_edits
 
     @staticmethod
-    def get_tokens_from_spans(
+    def get_tokens_and_offsets_from_spans(
         texts: str | list[str],
         spans: list[Span] | list[list[Span]],
         tokenizer: Tokenizer | None = None,
-    ) -> ListOfListsOfLabeledToken:
+    ) -> tuple[ListOfListsOfLabeledToken, list[list[tuple[int, int] | None]]]:
         """Convert spans to tokens.
 
         Args:
             texts (str | list[str]): The text(s) to which tags should be added.
             spans (list[Span] | list[list[Span]]): The spans to convert to tokens.
-            tokenizer (Tokenizer | None): The tokenizer to use for tokenization. If not provided, whitespace
+            tokenizer (Tokenizer | None): A `Tokenizer` used for text splitting. If not provided, whitespace
                 tokenization is used.
 
         Returns:
-            One or more `LabeledTokenList` representing the tagged texts.
+            One or more lists of `LabeledToken` representing the tagged texts.
         """
         if isinstance(texts, str):
             texts = [texts]
@@ -579,7 +608,7 @@ class WQEEntry(AlignedSequencesMixin):
             out = ListOfListsOfLabeledToken(
                 LabeledTokenList([LabeledToken(tok, None) for tok in str_tokens]) for str_tokens in all_str_tokens
             )
-            return out
+            return out, all_offsets
         if not isinstance(spans[0], list):
             spans = [spans]  # type: ignore
         spans = cast(list[list[Span]], spans)
@@ -625,14 +654,14 @@ class WQEEntry(AlignedSequencesMixin):
                     current_check_idx += 1  # Move to the next potentially overlapping span
                 labeled_tokens.append(LabeledToken(token, token_label))
             all_labeled_tokens.append(labeled_tokens)
-        return all_labeled_tokens
+        return all_labeled_tokens, all_offsets
 
     @staticmethod
     def get_text_and_spans_from_tagged(
         tagged: str,
         keep_tags: list[str] = [],
         ignore_tags: list[str] = [],
-    ) -> tuple[str, list[Span]]:
+    ) -> tuple[str, SpanList[Span]]:
         """Extract spans and clean text from a tagged string.
 
         Args:
@@ -655,7 +684,7 @@ class WQEEntry(AlignedSequencesMixin):
             tag_regex = re.compile(rf"<\/?(?:{tag_match_string})>")
 
         text_without_tags: str = ""
-        span_dicts: list[Span] = []
+        span_dicts: SpanList[Span] = SpanList()
         current_pos = 0
         open_tags = []
         open_positions = []
@@ -718,10 +747,11 @@ class WQEEntry(AlignedSequencesMixin):
     def get_spans_from_tokens(
         text: str,
         tokens: LabeledTokenInput,
+        offsets: list[tuple[int, int] | None] | None = None,
         tokenizer: Tokenizer | None = None,
         keep_labels: list[str] = [],
         ignore_labels: list[str] = [],
-    ) -> list[Span]:
+    ) -> SpanList[Span]:
         """Extract spans and clean text from a list of labeled tokens.
 
         Args:
@@ -733,20 +763,25 @@ class WQEEntry(AlignedSequencesMixin):
                 Token labels that should be ported over to spans. If not provided, all tags are kept (Default: []).
             ignore_labels (list[str]):
                 Token labels that should be ignored while parsing. If not provided, all tags are kept (Default: []).
+
+        Returns:
+            A list of `Span` objects corresponding to the labeled tokens.
         """
         tokens = LabeledToken.from_list(tokens)
-        if tokenizer is None:
-            logger.info("Tokenizer was not provided. Defaulting to whitespace tokenization.")
-            tokenizer = WhitespaceTokenizer()
-        _, offsets = tokenizer.tokenize_with_offsets(text)
+        if offsets is None:
+            if tokenizer is None:
+                logger.info("Tokenizer was not provided. Defaulting to whitespace tokenization.")
+                tokenizer = WhitespaceTokenizer()
+            _, all_offsets = tokenizer.tokenize_with_offsets(text)
+            offsets = all_offsets[0]
         curr_span_label: str | int | float | None = None
         curr_span_start: int | None = None
         curr_span_end: int | None = None
-        spans: list[Span] = []
+        spans: SpanList[Span] = SpanList()
 
         # To be considered for a span, a token must have a valid label (not ignored) and a valid character span
         # (not a special token).
-        for tok, offset in zip(tokens, offsets[0], strict=True):
+        for tok, offset in zip(tokens, offsets, strict=True):
             is_ignored = tok.l in ignore_labels
             is_kept = not keep_labels or tok.l in keep_labels
             has_valid_label = is_kept and not is_ignored
@@ -772,3 +807,48 @@ class WQEEntry(AlignedSequencesMixin):
         for span in spans:
             span.text = text[span.start : span.end]
         return spans
+
+    ### Analysis Methods ###
+
+    def token_labels_summary(
+        self,
+        aggregation: LabelAggregation = label_count_aggregation,
+    ) -> LabeledTokenList:
+        """If multiple `tokens` sequences are present, e.g. from multiple edits, get a summary of labels present on the
+        `tokens` with a customizable aggregation.
+
+        Args:
+            aggregation (Callable[[Sequence[Any], ...], Any]): The aggregation method to use for the summary.
+                Default: Count non-empty labels.
+
+        Returns:
+            A list of `LabeledToken` objects with the aggregated labels.
+        """
+        if isinstance(self.tokens, LabeledTokenList):
+            raise RuntimeError("Cannot summarize labels from a single list of tokens.")
+        summarized = LabeledTokenList()
+        tok_labels_variants: zip[tuple[LabeledToken, ...]] = zip(*self.tokens, strict=True)
+        for tok_labels in tok_labels_variants:
+            token = tok_labels[0].t
+            aggregate_label = aggregation([tok.l for tok in tok_labels])
+            summarized.append(LabeledToken(token, aggregate_label))
+        return summarized
+
+    def span_labels_summary(
+        self,
+        aggregation: LabelAggregation = label_count_aggregation,
+    ) -> SpanList[Span]:
+        """If multiple `spans` sequences are present, e.g. from multiple edits, get a summary of labels present on the
+        `spans` with a customizable aggregation.
+
+        Args:
+            aggregation (Callable[[Sequence[Any], ...], Any]): The aggregation method to use for the summary.
+                Default: Count non-empty labels.
+
+        Returns:
+            A list of `Span` objects with the aggregated labels.
+        """
+        if isinstance(self.spans, SpanList):
+            raise RuntimeError("Cannot summarize labels from a single list of spans.")
+        summarized_tokens = self.token_labels_summary(aggregation=aggregation)
+        return self.get_spans_from_tokens(self.text, summarized_tokens, self.tokens_offsets)

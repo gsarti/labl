@@ -10,3 +10,4 @@
         - from_spans
         - from_tagged
         - from_tokens
+        - from_edits_dataframe

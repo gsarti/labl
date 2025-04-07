@@ -41,6 +41,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+data = [
+  "datasets>=2.4.0",
+  "pandas>=1.5.3",
+]
 docs = [
   "mkdocs>=1.6.1",
   "mkdocs-material>=9.5.34",

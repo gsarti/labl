@@ -19,7 +19,7 @@
     handler: python
     options:
       show_root_heading: true
-      show_source: true
+      show_source: false
       members:
       - load
       - from_list
@@ -29,13 +29,13 @@
     handler: python
     options:
       show_root_heading: true
-      show_source: true
+      show_source: false
 
 ::: wqe.data.span.EditSpan
     handler: python
     options:
       show_root_heading: true
-      show_source: true
+      show_source: false
 
 ## 🔠 Tokens
 
@@ -49,18 +49,6 @@
       - from_tuple
       - from_list
 
-::: wqe.data.token.LabeledTokenList
-    handler: python
-    options:
-      show_root_heading: true
-      show_source: false
-
-::: wqe.data.token.ListOfListsOfLabeledToken
-    handler: python
-    options:
-      show_root_heading: true
-      show_source: false
-
 ## 🔄 Transforms
 
 ::: wqe.data.transform.RegexReduceToListOfListOfWords
@@ -70,6 +58,22 @@
       show_source: true
 
 ::: wqe.data.transform.ReduceToListOfListOfTokens
+    handler: python
+    options:
+      show_root_heading: true
+      show_source: true
+
+## 🤝 Aggregation Functions
+
+::: wqe.data.aggregation.LabelAggregation
+    handler: python
+    options:
+      show_root_heading: true
+      show_source: false
+      members:
+      - __call__
+
+::: wqe.data.aggregation.label_count_aggregation
     handler: python
     options:
       show_root_heading: true

@@ -69,7 +69,7 @@ class Tokenizer(ABC):
     @abstractmethod
     def tokenize_with_offsets(
         self, texts: str | list[str]
-    ) -> tuple[list[list[str]], Sequence[Sequence[tuple[int, int] | None]]]:
+    ) -> tuple[list[list[str]], list[list[tuple[int, int] | None]]]:
         """Tokenizes the input texts and returns the character spans of the tokens.
 
         Args:
@@ -109,6 +109,35 @@ class WhitespaceTokenizer(Tokenizer):
             tokens = [tokens]
         return [tok_transform.word_delimiter.join(sentence) for sentence in tokens]
 
+    def _get_offsets(self, tokens: list[str] | list[list[str]]) -> list[list[tuple[int, int] | None]]:
+        """Returns the character spans of the tokens in the original text.
+
+        Args:
+            tokens (list[str] | list[list[str]]): The tokens of one or more strings.
+
+        Returns:
+            A list of lists, each containing a tuple (start_idx, end_idx) marking the token position in the original
+            text. If the token is not present in the original text, None is used instead.
+        """
+        tok_transform: ReduceToListOfListOfWords = self.transform.transforms[-1]  # type: ignore
+        delimiter = tok_transform.word_delimiter
+        if isinstance(tokens, list) and isinstance(tokens[0], str):
+            tokens = cast(list[str], tokens)
+            tokens = [tokens]
+        all_offsets = []
+        for text in tokens:
+            text_offsets = []
+            start = 0
+            for token in text:
+                end = start + len(token)
+                text_offsets.append((start, end))
+                start = end + len(delimiter)
+            all_offsets.append(text_offsets)
+        assert all(len(t) == len(c) for t, c in zip(tokens, all_offsets, strict=True)), (
+            "Token and char span lengths do not match."
+        )
+        return all_offsets
+
     def tokenize_with_offsets(
         self, texts: str | list[str]
     ) -> tuple[list[list[str]], list[list[tuple[int, int] | None]]]:
@@ -121,25 +150,9 @@ class WhitespaceTokenizer(Tokenizer):
             The tokens of the input texts, and tuples (start_idx, end_idx) marking the position of tokens
             in the original text. If the token is not present in the original text, None is used instead.
         """
-        tok_transform: ReduceToListOfListOfWords = self.transform.transforms[-1]  # type: ignore
-        delimiter = tok_transform.word_delimiter
-        if isinstance(texts, str):
-            texts = [texts]
         tokens = self.transform(texts)
-        tokens = cast(list[list[str]], tokens)
-        char_spans = []
-        for sentence in tokens:
-            sentence_spans = []
-            start = 0
-            for token in sentence:
-                end = start + len(token)
-                sentence_spans.append((start, end))
-                start = end + len(delimiter)
-            char_spans.append(sentence_spans)
-        assert all(len(t) == len(c) for t, c in zip(tokens, char_spans, strict=True)), (
-            "Token and char span lengths do not match."
-        )
-        return tokens, char_spans
+        offsets = self._get_offsets(tokens)
+        return tokens, offsets
 
 
 class WordBoundaryTokenizer(Tokenizer):
@@ -186,7 +199,9 @@ class WordBoundaryTokenizer(Tokenizer):
         tokens = cast(list[list[str]], tokens)
         return [self._detokenize_str(sentence) for sentence in tokens]
 
-    def tokenize_with_offsets(self, texts: str | list[str]) -> tuple[list[list[str]], list[list[tuple[int, int]]]]:
+    def tokenize_with_offsets(
+        self, texts: str | list[str]
+    ) -> tuple[list[list[str]], list[list[tuple[int, int] | None]]]:
         """Tokenizes the input texts and returns the character spans of the tokens.
 
         Args:
@@ -201,16 +216,16 @@ class WordBoundaryTokenizer(Tokenizer):
         if isinstance(texts, str):
             texts = [texts]
         tokens: list[list[str]] = self.transform(texts)
-        char_spans: list[list[tuple[int, int]]] = []
-        for sentence in texts:
-            sentence_spans = []
-            for match in re.finditer(expression, sentence):
-                sentence_spans.append(match.span())
-            char_spans.append(sentence_spans)
-        assert all(len(t) == len(c) for t, c in zip(tokens, char_spans, strict=True)), (
+        all_offsets: list[list[tuple[int, int] | None]] = []
+        for text in texts:
+            text_offsets = []
+            for match in re.finditer(expression, text):
+                text_offsets.append(match.span())
+            all_offsets.append(text_offsets)
+        assert all(len(t) == len(c) for t, c in zip(tokens, all_offsets, strict=True)), (
             "Token and char span lengths do not match."
         )
-        return tokens, char_spans
+        return tokens, all_offsets
 
 
 class HuggingfaceTokenizer(Tokenizer):
