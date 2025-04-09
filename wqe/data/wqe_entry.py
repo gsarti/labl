@@ -2,15 +2,16 @@ import re
 from collections.abc import Sequence
 from logging import getLogger
 from textwrap import dedent, indent
-from typing import Literal, cast, overload
+from typing import cast, overload
 from warnings import warn
 
-from jiwer import CharacterOutput, WordOutput, process_characters, process_words
+from jiwer import WordOutput
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
 
-from wqe.data.aggregation import LabelAggregation, label_count_aggregation
+from wqe.data.aggregation import LabelAggregation, label_sumlen_aggregation
+from wqe.data.jiwer_ext import process_words
 from wqe.data.mixin import AlignedSequencesMixin
-from wqe.data.span import EditSpan, ListOfListsOfSpans, QESpanInput, QESpanWithEditInput, Span, SpanList
+from wqe.data.span import EditSpan, ListOfListsOfSpans, Span, SpanList
 from wqe.data.token import LabeledToken, LabeledTokenInput, LabeledTokenList, ListOfListsOfLabeledToken
 from wqe.data.tokenizer import Tokenizer, WhitespaceTokenizer, get_tokenizer
 
@@ -28,8 +29,6 @@ class WQEEntry(AlignedSequencesMixin):
     Attributes:
         text (str):
             The original text.
-        edits (list[str] | None):
-            One or more edited version of the text. Set only if the entry was created from one or more edits.
         spans (list[Span] | list[list[EditSpan]]): If only `text` is specified, `spans` is a list of
             `Span` items containing information about specific spans in `text`. If one or more `edits` are provided,
             `spans` is a list where the i-th element contains a list `EditSpan` with information about `text` and
@@ -42,6 +41,8 @@ class WQEEntry(AlignedSequencesMixin):
             contains a tokenized version of `text` with text or numeric labels for each token.
         tokens_offsets (list[tuple[int, int] | None]): Offsets for each token in `tokens`. Initialized automatically
             when `tokens` is created. The i-th element corresponds to the i-th token in `tokens`.
+        edits (list[str] | None):
+            One or more edited version of the text. Set only if the entry was created from one or more edits.
         edits_tagged (list[str] | None): Tagged versions (one per edit) of `edits` containing information from `spans`.
             Set only if the entry was created from one or more edits.
         edits_tokens (list[list[LabeledToken]] | None): List where the i-th element corresponds to a list of tokens for
@@ -51,8 +52,12 @@ class WQEEntry(AlignedSequencesMixin):
             `edit_tokens` this contains a list with the offsets for each token.
         aligned (list[WordOutput] | None): If one or more edits are provided, this is a list of aligned WordOutputs
             (one per edit) tokenized using the provided tokenizer. The alignment is done using the `jiwer` library.
-        aligned_char (list[CharacterOutput] | None): If one or more edits are provided, this is a list of aligned
-            CharacterOutputs (one per edit). The alignment is done using the `jiwer` library.
+        has_bos_token (bool): Whether the token sequence has a beginning-of-sequence token.
+        has_eos_token (bool): Whether the token sequence has an end-of-sequence token.
+        has_gaps (bool | None): Whether the token sequence has gaps. Gaps are used for text/edit pairs to mark the
+            positions of insertions and deletions in the original/edited texts, respectively. This is a bool only if
+            the entry was initialized with `.from_edits`, and is `None` otherwise. If `False`, it means gap annotations
+            were merged to the next token to the right.
     """
 
     # Private constructor key to prevent direct instantiation
@@ -70,7 +75,9 @@ class WQEEntry(AlignedSequencesMixin):
         edits_tokens: ListOfListsOfLabeledToken | None = None,
         edits_tokens_offsets: list[list[tuple[int, int] | None]] | None = None,
         aligned: list[WordOutput] | None = None,
-        aligned_char: list[CharacterOutput] | None = None,
+        has_bos_token: bool = False,
+        has_eos_token: bool = False,
+        has_gaps: bool | None = None,
         constructor_key: object | None = None,
     ):
         """Private constructor for `WQEEntry`.
@@ -117,20 +124,51 @@ class WQEEntry(AlignedSequencesMixin):
         self._edits_tokens = edits_tokens
         self._edits_tokens_offsets = edits_tokens_offsets
         self._aligned = aligned
-        self._aligned_char = aligned_char
+        self._has_bos_token = has_bos_token
+        self._has_eos_token = has_eos_token
+        self._has_gaps = has_gaps
 
     def __str__(self) -> str:
-        if self.aligned is not None:
-            return self._get_aligned_string(self.aligned, add_stats=True)
+        tagged_str = str(self.tagged) if isinstance(self.tagged, str) else ("\n" + 8 * " ").join(self.tagged)
         tokens_str = str(self.tokens).replace("\n", "\n" + 8 * " ")
-        return dedent(f"""\
+        out_str = dedent(f"""\
           Text:
         {indent(self.text, 7 * " ")}
         Tagged:
-        {indent(str(self.tagged), 7 * " ")}
+        {indent(tagged_str, 7 * " ")}
         Tokens:
         {indent(tokens_str, 7 * " ")}
         """)
+        if self.edits is not None:
+            edits_tagged = cast(list[str], self.edits_tagged)
+            edits_tokens = cast(ListOfListsOfLabeledToken, self.edits_tokens)
+            aligned = cast(list[WordOutput], self.aligned)
+            aligned_strings = self._get_aligned_strings(aligned)
+            for idx, edit in enumerate(self.edits):
+                edit_tagged_str = str(edits_tagged[idx])
+                edit_tokens_str = str(edits_tokens[idx]).replace("\n", "\n" + 8 * " ").strip()
+                aligned_str = aligned_strings[idx].replace("\n", "\n" + 8 * " ").strip()
+                spans_str = str(self.spans[idx]).replace("\n", "\n" + 8 * " ")
+                out_str += dedent(f"""\
+        === Edit {idx} ===
+        Edit Text:
+        {indent(edit, 12 * " ")}
+        Edit Tagged:
+        {indent(edit_tagged_str, 12 * " ")}
+        Edit Tokens:
+        {indent(edit_tokens_str, 12 * " ")}
+        Aligned:
+        {indent(aligned_str, 12 * " ")}
+        Spans:
+        {indent(spans_str, 12 * " ")}
+                """)
+        else:
+            spans_str = str(self.spans).replace("\n", "\n" + 8 * " ").strip()
+            out_str += dedent(f"""\
+            Spans:
+            {indent(spans_str, 7 * " ")}
+            """)
+        return out_str.strip()
 
     ### Getters and Setters ###
 
@@ -206,6 +244,30 @@ class WQEEntry(AlignedSequencesMixin):
     def edits_tokens_offsets(self, t: list[list[tuple[int, int] | None]] | None):
         raise RuntimeError("Cannot set the tokenized edited text offsets after initialization")
 
+    @property
+    def has_bos_token(self) -> bool:
+        return self._has_bos_token
+
+    @has_bos_token.setter
+    def has_bos_token(self, t: bool):
+        raise RuntimeError("Cannot set the boolean flag `has_bos_token` after initialization")
+
+    @property
+    def has_eos_token(self) -> bool:
+        return self._has_eos_token
+
+    @has_eos_token.setter
+    def has_eos_token(self, t: bool):
+        raise RuntimeError("Cannot set the boolean flag `has_eos_token` after initialization")
+
+    @property
+    def has_gaps(self) -> bool | None:
+        return self._has_gaps
+
+    @has_gaps.setter
+    def has_gaps(self, t: bool | None):
+        raise RuntimeError("Cannot set the boolean flag `has_gaps` after initialization")
+
     ### Constructors ###
 
     @classmethod
@@ -215,53 +277,117 @@ class WQEEntry(AlignedSequencesMixin):
         edits: str | list[str],
         tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
         tokenizer_kwargs: dict = {},
+        with_gaps: bool = True,
+        sub_label: str = "S",
+        ins_label: str = "I",
+        del_label: str = "D",
+        gap_token: str = "▁",
     ) -> "WQEEntry":
         """Create a `WQEEntry` from a text and one or more edits.
 
         Args:
-            text (str):
-                The original text.
-            edits (str | list[str] | None):
-                One or more edited version of the text.
+            text (str): The original text.
+            edits (str | list[str] | None): One or more edited version of the text.
             tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A `Tokenizer`
                 used for tokenization. Supports initialization from a `transformers.PreTrainedTokenizer`, and uses
                 whitespace tokenization by default.
             tokenizer_kwargs (dict): Additional arguments for the tokenizer.
+            with_gaps (bool): Whether to add gaps to the tokens and offsets. Gaps are used to mark the positions of
+                insertions and deletions in the original/edited texts, respectively. If false, those are merged to the
+                next token to the right. Default: True.
+            sub_label (str): The label for substitutions. Default: "S".
+            ins_label (str): The label for insertions. Default: "I".
+            del_label (str): The label for deletions. Default: "D".
+            gap_token (str): The token to use for gaps. Default: "▁".
+
+        Example:
+            ```python
+            from wqe.data.wqe_entry import WQEEntry
+
+            entry = WQEEntry.from_edits(
+                text="a simple example",
+                edits=["this is a simple enough test, you know?", "an example"],
+                tokenizer="facebook/nllb-200-3.3B",
+                tokenizer_kwargs={
+                    "tgt_lang": "ita_Latn",
+                    "add_special_tokens": True,
+                },
+            )
+            print(entry.aligned_str)
+            >>> TEXT: ita_Latn ***** *** ▁a ▁simple ******* ***** * **** ***** ▁example </s>
+                EDIT: ita_Latn ▁this ▁is ▁a ▁simple ▁enough ▁test , ▁you ▁know        ? </s>
+                                I   I                  I     I I    I     I        S
+
+                TEXT: ita_Latn  ▁a ▁simple ▁example </s>
+                EDIT: ita_Latn ▁an ******* ▁example </s>
+                                S       D
+            ```
         """
         tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
         edits = [edits] if isinstance(edits, str) else edits
         aligned: list[WordOutput] | None = []
-        aligned_char: list[CharacterOutput] | None = []
-        for edit in edits:
-            aligned_tok = process_words(
-                text,
-                edit,
-                reference_transform=tokenizer.transform,
-                hypothesis_transform=tokenizer.transform,
+        tokens_str, offsets = tokenizer.tokenize_with_offsets(text)
+        tokens_with_gaps, offsets_with_gaps = cls._add_gaps_to_tokens_and_offsets(
+            tokens_str[0], offsets[0], tokenizer.has_bos_token, tokenizer.has_eos_token
+        )
+        all_edits_tokens_str, all_edits_offsets = tokenizer.tokenize_with_offsets(edits)
+        all_edits_tokens_with_gaps, all_edits_offsets_with_gaps = cls._add_gaps_to_tokens_and_offsets(
+            all_edits_tokens_str, all_edits_offsets, tokenizer.has_bos_token, tokenizer.has_eos_token
+        )
+        for edit_tokens_str in all_edits_tokens_str:
+            aligned_out = process_words(
+                texts=tokens_str, edits=[edit_tokens_str], is_text_pre_transformed=True, is_edit_pre_transformed=True
             )
-            aligned.append(aligned_tok)
-            aligned_char.append(process_characters(text, edit))
-        spans = cls.get_spans_from_edits(text=text, edits=edits, aligned=aligned_char)
-        f_orig_spans = cls._format_spans(spans, span_type=EditSpan, text_type="orig")
-        f_edit_spans = cls._format_spans(spans, span_type=EditSpan, text_type="edit")
+            aligned.append(aligned_out)
+        tokens, edits_tokens = cls.get_tokens_from_edits(
+            text=text,
+            edits=edits,
+            tokens=tokens_with_gaps,
+            offsets=offsets_with_gaps,
+            edits_tokens=all_edits_tokens_with_gaps,
+            edits_offsets=all_edits_offsets_with_gaps,
+            aligned=aligned,
+            tokenizer=tokenizer,
+            has_tokens_gaps=True,
+            sub_label=sub_label,
+            ins_label=ins_label,
+            del_label=del_label,
+            gap_token=gap_token,
+        )
+        if not with_gaps:
+            tokens = cls._merge_gap_annotations(tokens, has_bos_token=tokenizer.has_bos_token)
+            edits_tokens = cls._merge_gap_annotations(edits_tokens, has_bos_token=tokenizer.has_bos_token)
+            offsets = [offset + [None] for offset in offsets]
+            all_edits_offsets = [edit_offsets + [None] for edit_offsets in all_edits_offsets]
+        spans = cls.get_spans_from_edits(
+            text=text,
+            edits=edits,
+            offsets=offsets[0],
+            edits_offsets=all_edits_offsets,
+            aligned=aligned,
+            tokenizer=tokenizer,
+            sub_label=sub_label,
+            ins_label=ins_label,
+            del_label=del_label,
+        )
+        f_orig_spans = cast(list[Span], [[s.orig for s in l if s.orig is not None] for l in spans])
+        f_edit_spans = cast(list[Span], [[s.edit for s in l if s.edit is not None] for l in spans])
         tagged = cls.get_tagged_from_spans(texts=[text for _ in edits], spans=f_orig_spans)
         edits_tagged = cls.get_tagged_from_spans(texts=edits, spans=f_edit_spans)
-        tokens, offsets = cls.get_tokens_and_offsets_from_spans(
-            [text for _ in edits], f_orig_spans, tokenizer=tokenizer
-        )
-        edits_tokens, edits_offsets = cls.get_tokens_and_offsets_from_spans(edits, f_edit_spans, tokenizer=tokenizer)
         return cls(
             text=text,
             spans=spans,
             tagged=tagged,
             tokens=tokens,
-            tokens_offsets=offsets[0],
+            tokens_offsets=offsets_with_gaps if with_gaps else offsets[0],
             edits=edits,
             edits_tagged=edits_tagged,
             edits_tokens=edits_tokens,
-            edits_tokens_offsets=edits_offsets,
+            edits_tokens_offsets=all_edits_offsets_with_gaps if with_gaps else all_edits_offsets,
             aligned=aligned,
-            aligned_char=aligned_char,
+            has_bos_token=tokenizer.has_bos_token,
+            has_eos_token=tokenizer.has_eos_token,
+            has_gaps=with_gaps,
             constructor_key=cls.__constructor_key,
         )
 
@@ -295,6 +421,8 @@ class WQEEntry(AlignedSequencesMixin):
             tagged=tagged,
             tokens=tokens[0],
             tokens_offsets=offsets[0],
+            has_bos_token=tokenizer.has_bos_token,
+            has_eos_token=tokenizer.has_eos_token,
             constructor_key=cls.__constructor_key,
         )
 
@@ -331,6 +459,8 @@ class WQEEntry(AlignedSequencesMixin):
             tagged=tagged,
             tokens=tokens[0],
             tokens_offsets=offsets[0],
+            has_bos_token=tokenizer.has_bos_token,
+            has_eos_token=tokenizer.has_eos_token,
             constructor_key=cls.__constructor_key,
         )
 
@@ -354,9 +484,9 @@ class WQEEntry(AlignedSequencesMixin):
                 used for tokenization. Supports initialization from a `transformers.PreTrainedTokenizer`, and uses
                 whitespace tokenization by default.
             keep_labels (list[str]):
-                Label(s) used to mark selected tokens. If not provided, all tags are kept (Default: []).
+                Label(s) used to mark selected tokens. If not provided, all labels are kept (Default: []).
             ignore_labels (list[str]):
-                Label(s) that are present on tokens but should be ignored while parsing. If not provided, all tags
+                Label(s) that are present on tokens but should be ignored while parsing. If not provided, all labels
                 are kept (Default: []).
             tokenizer_kwargs (dict): Additional arguments for the tokenizer.
             tokens (list[str] | None):
@@ -377,14 +507,9 @@ class WQEEntry(AlignedSequencesMixin):
                 ],
                 ignore_labels=["O"],
             )
-            print(entry)
-            >>> Text:
-                     Apple Inc. is looking at buying U.K. startup for $1 billion
-                Tagged:
-                     <ORG>Apple Inc.</ORG> is looking at buying <LOC>U.K.</LOC> startup for <MONEY>$1 billion</MONEY>
-                Tokens:
-                     Apple Inc. is   looking at   buying U.K. startup for  $1    billion
-                     ORG   ORG                           LOC               MONEY MONEY
+            print(entry.tokens)
+            >>> Apple Inc. is looking at buying U.K. startup for    $1 billion
+                  ORG  ORG                       LOC             MONEY   MONEY
             ```
         """
         if labeled_tokens and (tokens or labels):
@@ -407,13 +532,15 @@ class WQEEntry(AlignedSequencesMixin):
         text = tokenizer.detokenize([tok.t for tok in labeled_tokens])[0]
         _, offsets = tokenizer.tokenize_with_offsets(text)
         spans = cls.get_spans_from_tokens(text, labeled_tokens, offsets[0], tokenizer, keep_labels, ignore_labels)
-        tagged = cls.get_tagged_from_spans(text, spans=cls._format_spans(spans))[0]
+        tagged = cls.get_tagged_from_spans(text, spans=spans)[0]
         return cls(
             text=text,
             spans=spans,
             tagged=tagged,
             tokens=labeled_tokens,
             tokens_offsets=offsets[0],
+            has_bos_token=tokenizer.has_bos_token,
+            has_eos_token=tokenizer.has_eos_token,
             constructor_key=cls.__constructor_key,
         )
 
@@ -421,127 +548,342 @@ class WQEEntry(AlignedSequencesMixin):
 
     @overload
     @staticmethod
-    def _format_spans(
-        spans: QESpanInput | Sequence[QESpanInput],
-        span_type: type[Span] = ...,
-    ) -> list[list[Span]]: ...
+    def _add_gaps_to_tokens_and_offsets(
+        tokens: list[str],
+        offsets: list[tuple[int, int] | None],
+        has_bos_token: bool,
+        has_eos_token: bool,
+        gap_token: str = "▁",
+    ) -> tuple[list[str], list[tuple[int, int] | None]]: ...
 
     @overload
     @staticmethod
-    def _format_spans(
-        spans: QESpanWithEditInput | Sequence[QESpanWithEditInput],
-        span_type: type[EditSpan] = ...,
-        text_type: Literal["orig", "edit"] = ...,
-    ) -> list[list[Span]]: ...
+    def _add_gaps_to_tokens_and_offsets(
+        tokens: list[list[str]],
+        offsets: list[list[tuple[int, int] | None]],
+        has_bos_token: bool,
+        has_eos_token: bool,
+        gap_token: str = "▁",
+    ) -> tuple[list[list[str]], list[list[tuple[int, int] | None]]]: ...
 
     @staticmethod
-    def _format_spans(
-        spans: QESpanInput | Sequence[QESpanInput] | QESpanWithEditInput | Sequence[QESpanWithEditInput],
-        span_type: type[Span | EditSpan] = Span,
-        text_type: Literal["orig", "edit"] = "orig",
-    ) -> list[list[Span]]:
-        """Build a list of spans from a list of `Span` or `EditSpan` objects.
+    def _add_gaps_to_tokens_and_offsets(
+        tokens: list[str] | list[list[str]],
+        offsets: list[tuple[int, int] | None] | list[list[tuple[int, int] | None]],
+        has_bos_token: bool,
+        has_eos_token: bool,
+        gap_token: str = "▁",
+    ) -> tuple[list[str], list[tuple[int, int] | None]] | tuple[list[list[str]], list[list[tuple[int, int] | None]]]:
+        """Adds gaps to a sequence of tokens and their offsets.
+
+        This is useful for adding annotations of insertions and deletions to the text and edits, respectively.
+        The resulting sequence will have 2N + 1 `tokens`, with `gap_token` at even indices like:
+        `GAP Hello GAP World GAP ! GAP`. The `offsets` will be `None` for the gaps.
 
         Args:
-            spans (QESpanInput | list[QESpanInput] | QESpanWithEditInput | list[QESpanWithEditInput]): The spans to
-                convert to tokens. `SpanListInput` can be a single list of `Span` or `EditSpan`, or a list of
-                lists of `Span` or `EditSpan`.
-            span_type (type[Span | EditSpan]): The type of span to use for tagging. Default: `Span`.
-            text_type (str):
-                If `span_type` is `EditSpan`, this specifies whether to use the original text or the edit.
+            tokens (list[str]): The tokens to add gaps to.
+            offsets (list[tuple[int, int]  |  None]): The offsets of the tokens.
+            has_bos_token (bool): Whether the token sequence has a beginning-of-sequence token.
+            has_eos_token (bool): Whether the token sequence has an end-of-sequence token.
+            gap_token (str): The token to use for gaps.
 
         Returns:
-            A list of lists of `Span` objects.
+            The tokens and offsets with gaps added.
         """
-        if len(spans) == 0:
-            return [[]]
-        if not isinstance(spans[0], list):
-            all_spans = [span_type.from_list(spans)]  # type: ignore
-        else:
-            all_spans = [span_type.from_list(span) for span in spans]  # type: ignore
-        if span_type is EditSpan:
-            all_spans = [[getattr(span, text_type) for span in span_list] for span_list in all_spans]
-        all_spans = cast(list[list[Span]], all_spans)
+        single_list = False
+        if isinstance(tokens, list) and not isinstance(tokens[0], list):
+            tokens = cast(list[list[str]], [tokens])
+            single_list = True
+        if isinstance(offsets, list) and not isinstance(offsets[0], list):
+            offsets = cast(list[list[tuple[int, int] | None]], [offsets])
+            single_list = True
+        tokens_with_gaps = []
+        offsets_with_gaps = []
+        for curr_tokens, curr_offsets in zip(tokens, offsets, strict=True):
+            curr_offsets = cast(list[tuple[int, int] | None], curr_offsets)
+            curr_tokens_with_gaps = []
+            curr_offsets_with_gaps = []
+            for idx, (tok, off) in enumerate(zip(curr_tokens, curr_offsets, strict=True)):
+                if idx == 0:
+                    if not has_bos_token:
+                        curr_tokens_with_gaps.append(gap_token)
+                        curr_offsets_with_gaps.append(None)
+                    else:
+                        curr_tokens_with_gaps.append(tok)
+                        curr_offsets_with_gaps.append(off)
+                        continue
+                curr_tokens_with_gaps.append(tok)
+                curr_offsets_with_gaps.append(off)
+                if (idx < len(curr_tokens) - 2 and has_eos_token) or not has_eos_token:
+                    curr_tokens_with_gaps.append(gap_token)
+                    curr_offsets_with_gaps.append(None)
+            tokens_with_gaps.append(curr_tokens_with_gaps)
+            offsets_with_gaps.append(curr_offsets_with_gaps)
 
-        # Filter out empty span that could be produced by insertions/deletions on the other text
-        all_spans = [[span for span in span_list if span.label is not None] for span_list in all_spans]
-        return all_spans
+        if len(tokens_with_gaps) == 1 and single_list:
+            tokens_with_gaps = tokens_with_gaps[0]
+            offsets_with_gaps = offsets_with_gaps[0]
+        return tokens_with_gaps, offsets_with_gaps
+
+    @staticmethod
+    def _span_from_offsets_indices(
+        text: str,
+        token_start_idx: int,
+        token_end_idx: int,
+        offsets: list[tuple[int, int] | None],
+        label: str | int | float | None,
+    ) -> Span:
+        """Creates a `Span` by extracting the text between the start and end indices of the tokens in the offsets.
+
+        Args:
+            text (str): The text to extract the span from.
+            token_start_idx (int): The index of the token where the span starts.
+            token_end_idx (int): The index of the token where the span ends.
+            offsets (list[tuple[int, int]  |  None]): A list of offsets for each token. Offsets are tuples of (start, end) indices marking
+                the position of the token in the text. If a token does not appear in the original text, its offset is `None`.
+            label (str | int | float | None): The label for the span.
+
+        Returns:
+            A `Span` object containing the start and end indice in `text`, the corresponding string and a label.
+        """
+        start_span = offsets[token_start_idx]
+        text_start_idx = start_span[0] if start_span is not None else -1
+        end_span = offsets[token_end_idx - 1]
+        text_end_idx = end_span[1] if end_span is not None else -1
+        span_text = text[text_start_idx:text_end_idx] if start_span is not None and end_span is not None else None
+        return Span(start=text_start_idx, end=text_end_idx, label=label, text=span_text)
+
+    @staticmethod
+    def _merge_gap_annotations(
+        tokens: ListOfListsOfLabeledToken,
+        has_bos_token: bool,
+    ) -> ListOfListsOfLabeledToken:
+        """Merges gap annotations in a list of tokens.
+
+        Args:
+            tokens (ListOfListsOfLabeledToken): The list of tokens to merge.
+            has_bos_token (bool): Whether the token sequence has a beginning-of-sequence token.
+        Returns:
+            A list of tokens with going from 2N + 1 tokens (assuming no bos/eos) to N + 1 tokens
+            (only the last gap is kept to handle end-of-sequence insertions).
+        """
+        merged_tokens = ListOfListsOfLabeledToken()
+        for token_list in tokens:
+            merged_token_list = LabeledTokenList()
+            gap_label = None
+            for idx, token in enumerate(token_list):
+                if idx % 2 == 0:  # Even indices are gaps
+                    # Final gap is kept regardless of it being an EOS token or not
+                    if (has_bos_token and idx == 0) or idx == len(token_list) - 1:
+                        merged_token_list.append(token)
+                    else:
+                        gap_label = token.label
+                else:
+                    if gap_label is not None and token.l is not None:
+                        label = token.l + gap_label  # type: ignore
+                    elif token.l is None:
+                        label = gap_label
+                    else:
+                        label = token.l
+                    merged_token_list.append(LabeledToken(token=token.t, label=label))
+                    gap_label = None
+            merged_tokens.append(merged_token_list)
+        return merged_tokens
+
+    @staticmethod
+    def _remove_gap_offsets(
+        all_offsets: list[list[tuple[int, int] | None]],
+        has_bos_token: bool,
+    ) -> list[list[tuple[int, int] | None]]:
+        """Removes gap offsets from a list of offsets.
+        Args:
+            all_offsets (list[list[tuple[int, int] | None]]): The list of offsets to filter.
+            has_bos_token (bool): Whether the token sequence has a beginning-of-sequence token.
+        Returns:
+            A list of offsets with gaps removed. The final gap offset is kept regardless of it being an EOS token
+            to handle end-of-sequence insertions.
+        """
+        return [
+            [
+                off
+                for idx, off in enumerate(offsets)
+                if off is not None or idx == len(offsets) - 1 or (idx == 0 and has_bos_token)
+            ]
+            for offsets in all_offsets
+        ]
 
     ### Formatting Methods ###
-
-    @overload
-    @staticmethod
-    def get_spans_from_edits(text: str, edits: str, aligned: CharacterOutput | None) -> SpanList[EditSpan]: ...
-
-    @overload
-    @staticmethod
-    def get_spans_from_edits(
-        text: str, edits: list[str], aligned: list[CharacterOutput] | None
-    ) -> ListOfListsOfSpans[EditSpan]: ...
 
     @staticmethod
     def get_spans_from_edits(
         text: str,
         edits: str | list[str],
-        aligned: CharacterOutput | list[CharacterOutput] | None,
-        sub_tag: str = "S",
-        ins_tag: str = "I",
-        del_tag: str = "D",
-    ) -> SpanList[EditSpan] | ListOfListsOfSpans[EditSpan]:
+        offsets: list[tuple[int, int] | None] | None = None,
+        edits_offsets: list[list[tuple[int, int] | None]] | None = None,
+        aligned: WordOutput | list[WordOutput] | None = None,
+        tokenizer: Tokenizer | None = None,
+        sub_label: str = "S",
+        ins_label: str = "I",
+        del_label: str = "D",
+    ) -> ListOfListsOfSpans[EditSpan]:
         """Convert edits to spans over a text and its edits.
 
         Args:
             text (str): The text.
             edits (str | list[str]): The edited text(s).
-            aligned (CharacterOutput | list[CharacterOutput] | None): The character alignment output.
-                If `edits` is a single string, this should be a single `CharacterOutput`. If `edits` is a list of
-                strings, this should be a list of `CharacterOutput` objects. If not provided, the function will
-                obtain it automatically.
-            sub_tag (str): The tag for substitutions. Default: "S".
-            ins_tag (str): The tag for insertions. Default: "I".
-            del_tag (str): The tag for deletions. Default: "D".
+            aligned (WordOutput | list[WordOutput] | None): The aligned
+                `jiwer` output(s) between text and each one of its edits.
+                If `edits` is a single string, this should be a single `WordOutput`. If `edits` is a list of
+                strings, this should be a list of `WordOutput` objects. If not provided, the function will
+                compute the character-level alignment automatically.
+            sub_label (str): The label for substitutions. Default: "S".
+            ins_label (str): The label for insertions. Default: "I".
+            del_label (str): The label for deletions. Default: "D".
 
         Returns:
-            One or more lists of `EditSpan` objects with edit tags.
+            One or more lists of `EditSpan` objects with edit labels.
         """
         if isinstance(edits, str):
             edits = [edits]
+        if tokenizer is None:
+            logger.info("Tokenizer was not provided. Defaulting to whitespace tokenization.")
+            tokenizer = WhitespaceTokenizer()
         if aligned is None:
-            aligned_outputs = [process_characters(text, edit) for edit in edits]
-        elif isinstance(aligned, CharacterOutput):
-            aligned_outputs = [aligned]
+            aligned = [
+                process_words(text, edit, texts_transform=tokenizer.transform, edits_transform=tokenizer.transform)
+                for edit in edits
+            ]
+        elif isinstance(aligned, WordOutput):
+            aligned = cast(list[WordOutput], [aligned])
         else:
-            aligned_outputs = aligned
+            aligned = cast(list[WordOutput], aligned)
+        if offsets is None:
+            _, all_offsets = tokenizer.tokenize_with_offsets(text)
+            offsets = all_offsets[0]
+        if edits_offsets is None:
+            _, edits_offsets = tokenizer.tokenize_with_offsets(edits)
         all_spans: ListOfListsOfSpans[EditSpan] = ListOfListsOfSpans()
-        for edit, char_aligned_out in zip(edits, aligned_outputs, strict=True):
+        for edit, edit_offsets, al in zip(edits, edits_offsets, aligned, strict=True):
             edit_spans: SpanList[EditSpan] = SpanList()
-            for aligned_span in char_aligned_out.alignments[0]:
-                params_orig = {
-                    "start": aligned_span.ref_start_idx,
-                    "end": aligned_span.ref_end_idx,
-                    "text": text[aligned_span.ref_start_idx : aligned_span.ref_end_idx],
-                }
-                params_edit = {
-                    "start": aligned_span.hyp_start_idx,
-                    "end": aligned_span.hyp_end_idx,
-                    "text": edit[aligned_span.hyp_start_idx : aligned_span.hyp_end_idx],
-                }
+            for aligned_span in al.alignments[0]:
                 if aligned_span.type != "equal":
-                    if aligned_span.type == "substitute":
-                        params_orig["label"] = sub_tag
-                        params_edit["label"] = sub_tag
-                    elif aligned_span.type == "insert":
-                        params_orig["label"] = None
-                        params_edit["label"] = ins_tag
-                    elif aligned_span.type == "delete":
-                        params_orig["label"] = del_tag
-                        params_edit["label"] = None
-                    span = EditSpan(orig=Span(**params_orig), edit=Span(**params_edit))
-                    edit_spans.append(span)
+                    orig_span = None
+                    if aligned_span.type in ("delete", "substitute"):
+                        orig_span = WQEEntry._span_from_offsets_indices(
+                            text=text,
+                            token_start_idx=aligned_span.ref_start_idx,
+                            token_end_idx=aligned_span.ref_end_idx,
+                            offsets=offsets,
+                            label=sub_label if aligned_span.type == "substitute" else del_label,
+                        )
+                    edit_span = None
+                    if aligned_span.type in ("insert", "substitute"):
+                        edit_span = WQEEntry._span_from_offsets_indices(
+                            text=edit,
+                            token_start_idx=aligned_span.hyp_start_idx,
+                            token_end_idx=aligned_span.hyp_end_idx,
+                            offsets=edit_offsets,
+                            label=sub_label if aligned_span.type == "substitute" else ins_label,
+                        )
+                    if orig_span or edit_span:
+                        edit_spans.append(EditSpan(orig=orig_span, edit=edit_span))
             all_spans.append(edit_spans)
-        if len(all_spans) == 1:
-            return all_spans[0]
         return all_spans
+
+    @staticmethod
+    def get_tokens_from_edits(
+        text: str,
+        edits: str | list[str],
+        tokens: list[str] | None = None,
+        offsets: list[tuple[int, int] | None] | None = None,
+        edits_tokens: list[list[str]] | None = None,
+        edits_offsets: list[list[tuple[int, int] | None]] | None = None,
+        aligned: WordOutput | list[WordOutput] | None = None,
+        tokenizer: Tokenizer | None = None,
+        has_tokens_gaps: bool = False,
+        sub_label: str = "S",
+        ins_label: str = "I",
+        del_label: str = "D",
+        gap_token: str = "▁",
+    ) -> tuple[ListOfListsOfLabeledToken, ListOfListsOfLabeledToken]:
+        """Convert edits to tokens.
+
+        Args:
+            text (str): The text.
+            edits (str | list[str]): The edited text(s).
+            aligned (WordOutput | list[WordOutput] | None): The aligned output
+                If `edits` is a single string, this should be a single `WordOutput`. If `edits` is a list of
+                strings, this should be a list of `WordOutput` objects. If not provided, the function will
+                obtain it automatically using the tokenizer for spltting. Default: None.
+            tokenizer (Tokenizer | None): A `Tokenizer` used for text splitting. If not provided, whitespace
+                tokenization is used. Default: None.
+
+        Returns:
+            One or more lists of `LabeledToken` objects with edit tags and their offsets.
+        """
+        if isinstance(edits, str):
+            edits = [edits]
+        if tokenizer is None:
+            logger.info("Tokenizer was not provided. Defaulting to whitespace tokenization.")
+            tokenizer = WhitespaceTokenizer()
+        if aligned is None:
+            aligned = [
+                process_words(text, edit, texts_transform=tokenizer.transform, edits_transform=tokenizer.transform)
+                for edit in edits
+            ]
+        elif isinstance(aligned, WordOutput):
+            aligned = cast(list[WordOutput], [aligned])
+        else:
+            aligned = cast(list[WordOutput], aligned)
+        if tokens is None or offsets is None:
+            all_tokens_str, all_offsets = tokenizer.tokenize_with_offsets(text)
+            tokens = all_tokens_str[0]
+            offsets = all_offsets[0]
+        if edits_tokens is None or edits_offsets is None:
+            edits_tokens, edits_offsets = tokenizer.tokenize_with_offsets(edits)
+        if not has_tokens_gaps:
+            tokens, offsets = WQEEntry._add_gaps_to_tokens_and_offsets(
+                tokens, offsets, tokenizer.has_bos_token, tokenizer.has_eos_token, gap_token=gap_token
+            )
+            edits_tokens, edits_offsets = WQEEntry._add_gaps_to_tokens_and_offsets(
+                edits_tokens, edits_offsets, tokenizer.has_bos_token, tokenizer.has_eos_token, gap_token=gap_token
+            )
+        all_tokens: ListOfListsOfLabeledToken = ListOfListsOfLabeledToken()
+        all_edits_tokens: ListOfListsOfLabeledToken = ListOfListsOfLabeledToken()
+        for output, curr_edit_tokens in zip(aligned, edits_tokens, strict=True):
+            token_labels: list[str | None] = [None] * len(tokens)
+            edit_labels: list[str | None] = [None] * len(curr_edit_tokens)
+            for alignment in output.alignments[0]:
+                text_start_idx = alignment.ref_start_idx
+                text_end_idx = alignment.ref_end_idx
+                edit_start_idx = alignment.hyp_start_idx
+                edit_end_idx = alignment.hyp_end_idx
+                if tokenizer.has_bos_token:
+                    text_start_idx -= 1
+                    text_end_idx -= 1
+                    edit_start_idx -= 1
+                    edit_end_idx -= 1
+                if alignment.type == "insert":
+                    token_labels[text_start_idx * 2] = ins_label
+                elif alignment.type in ("delete", "substitute"):
+                    label = sub_label if alignment.type == "substitute" else del_label
+                    for idx in range(text_start_idx, text_end_idx):
+                        token_labels[idx * 2 + 1] = label
+                if alignment.type == "delete":
+                    edit_labels[edit_start_idx * 2] = del_label
+                elif alignment.type in ("insert", "substitute"):
+                    label = sub_label if alignment.type == "substitute" else ins_label
+                    for idx in range(edit_start_idx, edit_end_idx):
+                        edit_labels[idx * 2 + 1] = label
+            tokens_with_labels = LabeledTokenList(
+                [LabeledToken(tok, label) for tok, label in zip(tokens, token_labels, strict=True)]
+            )
+            edits_tokens_with_labels = LabeledTokenList(
+                [LabeledToken(tok, label) for tok, label in zip(curr_edit_tokens, edit_labels, strict=True)]
+            )
+            all_tokens.append(tokens_with_labels)
+            all_edits_tokens.append(edits_tokens_with_labels)
+        return all_tokens, all_edits_tokens
 
     @staticmethod
     def get_tagged_from_spans(
@@ -810,16 +1152,38 @@ class WQEEntry(AlignedSequencesMixin):
 
     ### Analysis Methods ###
 
+    def merge_gap_annotations(self):
+        """Merge gap annotations in the `tokens`, `tokens_offsets`, `edits_tokens` and `edits_offsets` attributes.
+
+        This method is equivalent to calling `WQEEntry.from_edits` with `with_gaps=False`. Gap annotations are merged
+        to the next non-gap token to the right, and the gap label is added to the label of the non-gap token. The last
+        gap is kept to account for insertions at the end of the text.
+
+        E.g. `GAP Hello GAP World GAP ! GAP` becomes `Hello World ! GAP`.
+             `  I     S   I               I`         `   IS     I     I`
+        """
+        if self.has_gaps is None:
+            raise RuntimeError("Gaps are not available for entries that were not initialized from edits.")
+        elif self.has_gaps is False:
+            raise RuntimeError("Gaps for the current entry were already merged.")
+        if isinstance(self.tokens, ListOfListsOfLabeledToken):
+            self._tokens = self._merge_gap_annotations(self.tokens, self.has_bos_token)
+            self._tokens_offsets = self._remove_gap_offsets([self.tokens_offsets], self.has_bos_token)[0]
+        if self.edits_tokens is not None and self.edits_tokens_offsets is not None:
+            self._edits_tokens = self._merge_gap_annotations(self.edits_tokens, self.has_bos_token)
+            self._edits_tokens_offsets = self._remove_gap_offsets(self.edits_tokens_offsets, self.has_bos_token)
+        self._has_gaps = False
+
     def token_labels_summary(
         self,
-        aggregation: LabelAggregation = label_count_aggregation,
+        aggregation: LabelAggregation = label_sumlen_aggregation,
     ) -> LabeledTokenList:
         """If multiple `tokens` sequences are present, e.g. from multiple edits, get a summary of labels present on the
         `tokens` with a customizable aggregation.
 
         Args:
             aggregation (Callable[[Sequence[Any], ...], Any]): The aggregation method to use for the summary.
-                Default: Count non-empty labels.
+                Default: Total length of non-empty labels.
 
         Returns:
             A list of `LabeledToken` objects with the aggregated labels.
@@ -836,14 +1200,14 @@ class WQEEntry(AlignedSequencesMixin):
 
     def span_labels_summary(
         self,
-        aggregation: LabelAggregation = label_count_aggregation,
+        aggregation: LabelAggregation = label_sumlen_aggregation,
     ) -> SpanList[Span]:
         """If multiple `spans` sequences are present, e.g. from multiple edits, get a summary of labels present on the
         `spans` with a customizable aggregation.
 
         Args:
             aggregation (Callable[[Sequence[Any], ...], Any]): The aggregation method to use for the summary.
-                Default: Count non-empty labels.
+                Default: Total length of non-empty labels.
 
         Returns:
             A list of `Span` objects with the aggregated labels.

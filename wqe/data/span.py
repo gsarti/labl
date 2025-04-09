@@ -1,6 +1,5 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
-from pprint import pformat
 from typing import Generic, TypeVar
 
 DictSpan = dict[str, str | int | float | None]
@@ -77,6 +76,10 @@ class Span(BaseSpan[DictSpan]):
     label: str | int | float | None
     text: str | None = None
 
+    def __str__(self) -> str:
+        """Returns a string representation of the span."""
+        return f"{self.start}:{self.end} ({self.text}) => {self.label}"
+
 
 @dataclass
 class EditSpan(BaseSpan[tuple[DictSpan, DictSpan]]):
@@ -86,8 +89,8 @@ class EditSpan(BaseSpan[tuple[DictSpan, DictSpan]]):
         edit (Span): The span over the edited text.
     """
 
-    orig: Span
-    edit: Span
+    orig: Span | None
+    edit: Span | None
     _load_from_type: type = tuple
 
     @classmethod
@@ -96,16 +99,29 @@ class EditSpan(BaseSpan[tuple[DictSpan, DictSpan]]):
         edit = Span.load(data[1]) if isinstance(data[1], dict) else data[1]
         return cls(orig, edit)
 
+    def __str__(self) -> str:
+        """Returns a string representation of the span."""
+        out = ""
+        if self.orig is not None:
+            out += f"ORIG - {self.orig.start}:{self.orig.end} ({self.orig.text}) => {self.orig.label}\n"
+        if self.edit is not None:
+            out += f"EDIT - {self.edit.start}:{self.edit.end} ({self.edit.text}) => {self.edit.label}\n"
+        return out
+
 
 class SpanList(list[SpanType]):
     """Class for a list of `Span`, with custom visualization."""
 
     def __str__(self):
-        return pformat(self, indent=4)
+        out = ""
+        for idx, span in enumerate(self):
+            out += f"{idx}:\n"
+            out += str(span)
+        return out
 
 
 class ListOfListsOfSpans(list[SpanList[SpanType]]):
     """Class for a list of lists of `Span`, with custom visualization."""
 
     def __str__(self) -> str:
-        return "\n".join(str(lst) for lst in self)
+        return "\n-----\n".join(str(lst) for lst in self)

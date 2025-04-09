@@ -64,10 +64,10 @@ class LabeledTokenList(list[LabeledToken]):
 
     def __str__(self) -> str:
         lengths = [max(len(str(t.t)), len(str(t.l))) if t.l is not None else len(str(t.t)) for t in self]
-        txt_toks = " ".join(f"{tok.t:<{tok_len}}" for tok, tok_len in zip(self, lengths, strict=True)) + "\n"
+        txt_toks = " ".join(f"{tok.t:>{tok_len}}" for tok, tok_len in zip(self, lengths, strict=True)) + "\n"
         txt_labels = (
             " ".join(
-                f"{tok.l if tok.l is not None else '':<{tok_len}}" for tok, tok_len in zip(self, lengths, strict=True)
+                f"{tok.l if tok.l is not None else '':>{tok_len}}" for tok, tok_len in zip(self, lengths, strict=True)
             )
             + "\n"
         )

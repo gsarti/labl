@@ -64,10 +64,10 @@ def test_labeled_token_list_init():
 
 def test_labeled_token_list_str():
     token_list = LabeledTokenList([LabeledToken("hello", "OK"), LabeledToken("world", "BAD")])
-    expected_str = "hello world\nOK    BAD  \n"
+    expected_str = "hello world\n   OK   BAD\n"
     assert str(token_list) == expected_str
 
     # Test with None labels
     token_list = LabeledTokenList([LabeledToken("hello", None), LabeledToken("world", "BAD")])
-    expected_str = "hello world\n      BAD  \n"
+    expected_str = "hello world\n        BAD\n"
     assert str(token_list) == expected_str

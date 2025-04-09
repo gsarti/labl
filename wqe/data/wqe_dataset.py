@@ -43,6 +43,11 @@ class WQEDataset:
         edits: list[str] | list[list[str]],
         tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
         tokenizer_kwargs: dict = {},
+        with_gaps: bool = True,
+        sub_label: str = "S",
+        ins_label: str = "I",
+        del_label: str = "D",
+        gap_token: str = "▁",
     ) -> "WQEDataset":
         """Create a `WQEDataset` from a set of texts and one or more edits for each text.
 
@@ -55,6 +60,13 @@ class WQEDataset:
                 used for tokenization. Supports initialization from a `transformers.PreTrainedTokenizer`, and uses
                 whitespace tokenization by default.
             tokenizer_kwargs (dict): Additional arguments for the tokenizer.
+            with_gaps (bool): Whether to add gaps to the tokens and offsets. Gaps are used to mark the positions of
+                insertions and deletions in the original/edited texts, respectively. If false, those are merged to the
+                next token to the right. Default: True.
+            sub_label (str): The label for substitutions. Default: "S".
+            ins_label (str): The label for insertions. Default: "I".
+            del_label (str): The label for deletions. Default: "D".
+            gap_token (str): The token to use for gaps. Default: "▁".
         """
         tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
         return cls(
@@ -63,6 +75,11 @@ class WQEDataset:
                     text,
                     edit,
                     tokenizer=tokenizer,
+                    with_gaps=with_gaps,
+                    sub_label=sub_label,
+                    ins_label=ins_label,
+                    del_label=del_label,
+                    gap_token=gap_token,
                 )
                 for text, edit in tqdm(
                     zip(texts, edits, strict=True), desc="Creating WQEDataset", total=len(texts), unit="entries"
@@ -198,6 +215,11 @@ class WQEDataset:
         entry_ids: str | list[str],
         tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
         tokenizer_kwargs: dict[str, Any] = {},
+        with_gaps: bool = True,
+        sub_label: str = "S",
+        ins_label: str = "I",
+        del_label: str = "D",
+        gap_token: str = "▁",
     ) -> "WQEDataset":
         """Create a `WQEDataset` from a `pandas.DataFrame` with edits.
 
@@ -215,6 +237,13 @@ class WQEDataset:
                 used for tokenization. Supports initialization from a `transformers.PreTrainedTokenizer`, and uses
                 whitespace tokenization by default.
             tokenizer_kwargs (dict[str, Any], optional): _description_. Defaults to {}.
+            with_gaps (bool): Whether to add gaps to the tokens and offsets. Gaps are used to mark the positions of
+                insertions and deletions in the original/edited texts, respectively. If false, those are merged to the
+                next token to the right. Default: True.
+            sub_label (str): The label for substitutions. Default: "S".
+            ins_label (str): The label for insertions. Default: "I".
+            del_label (str): The label for deletions. Default: "D".
+            gap_token (str): The token to use for gaps. Default: "▁".
 
         Returns:
             A `WQEDataset` initialized from the set of texts and edits.
@@ -241,4 +270,9 @@ class WQEDataset:
             all_texts,
             all_edits,
             tokenizer=tokenizer,
+            with_gaps=with_gaps,
+            sub_label=sub_label,
+            ins_label=ins_label,
+            del_label=del_label,
+            gap_token=gap_token,
         )

@@ -22,10 +22,16 @@ class Tokenizer(ABC):
         transform (jiwer.AbstractTransform | jiwer.Compose): The transformation to apply to the input strings.
             This should be a composition of transformations that includes a final step producing a list of list of
             tokens, following [jiwer transformations](https://jitsi.github.io/jiwer/reference/transformations/).
+        has_bos_token (bool): Whether the tokenizer sets a beginning-of-sequence token. Defaults to False.
+        has_eos_token (bool): Whether the tokenizer sets an end-of-sequence token. Defaults to False.
     """
 
-    def __init__(self, transform: AbstractTransform | Compose):
+    def __init__(
+        self, transform: AbstractTransform | Compose, has_bos_token: bool = False, has_eos_token: bool = False
+    ):
         self.transform = transform
+        self.has_bos_token = has_bos_token
+        self.has_eos_token = has_eos_token
 
     def __call__(
         self, texts: str | list[str], with_offsets: bool = False
@@ -253,10 +259,10 @@ class HuggingfaceTokenizer(Tokenizer):
             transform=ReduceToListOfListOfTokens(
                 tokenizer_or_id,
                 add_special_tokens=add_special_tokens,
-                has_bos_token=has_bos_token,
-                has_eos_token=has_eos_token,
                 **kwargs,
-            )
+            ),
+            has_bos_token=has_bos_token,
+            has_eos_token=has_eos_token,
         )
         self.transform = cast(ReduceToListOfListOfTokens, self.transform)
 

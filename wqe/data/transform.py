@@ -41,16 +41,12 @@ class ReduceToListOfListOfTokens(ReduceToListOfListOfWords):
         tokenizer_or_id (str | PreTrainedTokenizer | PreTrainedTokenizerFast): The tokenizer or its ID.
             If a string is provided, it will be used to load the tokenizer from the `transformers` library.
         add_special_tokens (bool): Whether to add special tokens to the tokenized output. Defaults to False.
-        has_bos_token (bool): Whether the tokenizer sets a beginning-of-sequence token. Defaults to True.
-        has_eos_token (bool): Whether the tokenizer sets an end-of-sequence token. Defaults to True.
     """
 
     def __init__(
         self,
         tokenizer_or_id: str | PreTrainedTokenizer | PreTrainedTokenizerFast,
         add_special_tokens: bool = False,
-        has_bos_token: bool = True,
-        has_eos_token: bool = True,
         **kwargs,
     ):
         self.add_special_tokens = add_special_tokens
@@ -62,8 +58,6 @@ class ReduceToListOfListOfTokens(ReduceToListOfListOfWords):
             if kwargs:
                 logger.warning(f"Ignoring additional keyword arguments for tokenizer initialization: {kwargs}.")
             self.tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast = tokenizer_or_id
-        self.has_bos_token = has_bos_token
-        self.has_eos_token = has_eos_token
 
     def process_string(self, s: str):
         if self.add_special_tokens:

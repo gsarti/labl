@@ -78,3 +78,9 @@
     options:
       show_root_heading: true
       show_source: true
+
+::: wqe.data.aggregation.label_sumlen_aggregation
+    handler: python
+    options:
+      show_root_heading: true
+      show_source: true
