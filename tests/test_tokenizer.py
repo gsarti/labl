@@ -1,6 +1,6 @@
 from pytest import fixture
 
-from wqe.data.tokenizer import HuggingfaceTokenizer, WhitespaceTokenizer, WordBoundaryTokenizer
+from wqe.utils.tokenizer import HuggingfaceTokenizer, WhitespaceTokenizer, WordBoundaryTokenizer
 
 
 @fixture

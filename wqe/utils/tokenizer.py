@@ -2,14 +2,16 @@
 
 import re
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import cast
 
 from jiwer import AbstractTransform, Compose, ReduceToListOfListOfWords, Strip
 from transformers.tokenization_utils import BatchEncoding, PreTrainedTokenizer
 from transformers.tokenization_utils_fast import PreTrainedTokenizerFast
 
-from wqe.data.transform import SPLIT_REGEX, ReduceToListOfListOfTokens, RegexReduceToListOfListOfWords
+from wqe.utils.aggregation import label_sum_aggregation
+from wqe.utils.token import LabelType
+from wqe.utils.transform import SPLIT_REGEX, ReduceToListOfListOfTokens, RegexReduceToListOfListOfWords
 
 
 class Tokenizer(ABC):
@@ -74,18 +76,175 @@ class Tokenizer(ABC):
 
     @abstractmethod
     def tokenize_with_offsets(
-        self, texts: str | list[str]
+        self, texts: str | list[str], add_gaps: bool = False, gap_token: str = "▁"
     ) -> tuple[list[list[str]], list[list[tuple[int, int] | None]]]:
         """Tokenizes the input texts and returns the character spans of the tokens.
 
         Args:
             texts (str | list[str]): The texts to tokenize.
+            add_gaps (bool): Whether gaps should be added before/after tokens and offsets.
+            gap_token (str): The token to use for gaps. Default: `▁`.
 
         Returns:
-            The tokens of the input texts, and tuples (start_idx, end_idx) marking the position of tokens
+            The tokens of the input texts, and tuples `(start_idx, end_idx)` marking the position of tokens
             in the original text. If the token is not present in the original text, None is used instead.
         """
         raise NotImplementedError("Subclasses must implement this method.")
+
+    def _add_gaps_to_tokens_and_offsets(
+        self,
+        tokens: list[list[str]],
+        offsets: list[list[tuple[int, int] | None]],
+        gap_token: str = "▁",
+    ) -> tuple[list[list[str]], list[list[tuple[int, int] | None]]]:
+        """Adds gaps to one or more sequences of tokens and their offsets.
+
+        This is useful for adding annotations of insertions and deletions to the text and edits, respectively.
+        The resulting sequence will have 2N + 1 `tokens`, with `gap_token` at even indices like:
+        `▁ Hello ▁ World ▁ ! ▁`. The `offsets` will be `None` for the gaps.
+
+        Args:
+            tokens (list[list[str]]): One or more lists of tokens to add gaps to.
+            offsets (list[list[tuple[int, int]  |  None]]): One or more offsets for the original `tokens`.
+            gap_token (str): The token to use for gaps. Default: `▁`.
+
+        Returns:
+            A tuple containing a list of list of tokens with gaps and a list of lists with the respective offsets.
+        """
+        tokens_with_gaps = []
+        offsets_with_gaps = []
+        for curr_tokens, curr_offsets in zip(tokens, offsets, strict=True):
+            curr_tokens_with_gaps = []
+            curr_offsets_with_gaps = []
+            for idx, (tok, off) in enumerate(zip(curr_tokens, curr_offsets, strict=True)):
+                if idx == 0:
+                    if not self.has_bos_token:
+                        curr_tokens_with_gaps.append(gap_token)
+                        curr_offsets_with_gaps.append(None)
+                    else:
+                        curr_tokens_with_gaps.append(tok)
+                        curr_offsets_with_gaps.append(off)
+                        continue
+                curr_tokens_with_gaps.append(tok)
+                curr_offsets_with_gaps.append(off)
+                if (idx < len(curr_tokens) - 2 and self.has_eos_token) or not self.has_eos_token:
+                    curr_tokens_with_gaps.append(gap_token)
+                    curr_offsets_with_gaps.append(None)
+            tokens_with_gaps.append(curr_tokens_with_gaps)
+            offsets_with_gaps.append(curr_offsets_with_gaps)
+        return tokens_with_gaps, offsets_with_gaps
+
+    @staticmethod
+    def _merge_gap_annotations(
+        all_labels: Sequence[Sequence[LabelType]],
+        merge_fn: Callable[[Sequence[LabelType]], LabelType] | None = None,
+        has_bos_token: bool = False,
+    ) -> Sequence[Sequence[LabelType]]:
+        """Merges gap annotations in a list of token_labels.
+
+        Args:
+            labels (list[list[str | int | float | None]]): A list containing token annotations that need to be
+                merged.
+            merge_fn (callable): A callable taking in a sequence of labels (`str | int | float | None`) and returning a
+                merged label of type `str | int | float | None`. Default: `None` (add labels together).
+        Returns:
+            A list of tokens with N + 1 tokens, as opposed to 2N + 1 tokens with gaps (assuming no given bos/eos,
+            only the last gap is kept to handle end-of-sequence insertions).
+        """
+        if merge_fn is None:
+            merge_fn = label_sum_aggregation
+        merged_all_labels = []
+        for labels in all_labels:
+            merged_labels = []
+            gap_label = None
+            for idx in range(len(labels)):
+                if idx % 2 == 0:  # Even indices are gaps
+                    # Final gap is kept regardless of it being an EOS token or not
+                    if (has_bos_token and idx == 0) or idx == len(labels) - 1:
+                        merged_labels.append(labels[idx])
+                    else:
+                        gap_label = labels[idx]
+                else:
+                    if gap_label is not None and labels[idx] is not None:
+                        label = merge_fn([gap_label, labels[idx]])
+                    elif labels[idx] is None:
+                        label = gap_label
+                    else:
+                        label = labels[idx]
+                    merged_labels.append(label)
+                    gap_label = None
+            merged_all_labels.append(merged_labels)
+        return merged_all_labels
+
+    @staticmethod
+    def _remove_gap_tokens(
+        all_tokens: list[list[str]],
+        has_bos_token: bool,
+    ) -> list[list[str]]:
+        """Removes gap tokens from a list of tokens.
+
+        Args:
+            all_tokens (list[list[str]]): The list of tokens to filter.
+            has_bos_token (bool): Whether the token sequence has a beginning-of-sequence token.
+            has_eos_token (bool): Whether the token sequence has an end-of-sequence token.
+
+        Returns:
+            A list of tokens with gaps removed. The final gap token is kept regardless of it being an EOS token
+            to handle end-of-sequence insertions.
+        """
+        out_tokens = []
+        for tokens in all_tokens:
+            curr_out_tokens = []
+            for idx in range(len(tokens)):
+                if idx % 2 == 0:  # Even indices are gaps
+                    # Final gap is kept regardless of it being an EOS token or not
+                    if (has_bos_token and idx == 0) or idx == len(tokens) - 1:
+                        curr_out_tokens.append(tokens[idx])
+                else:
+                    curr_out_tokens.append(tokens[idx])
+            out_tokens.append(curr_out_tokens)
+        return out_tokens
+
+    @staticmethod
+    def _remove_gap_offsets(
+        all_offsets: list[list[tuple[int, int] | None]],
+        has_bos_token: bool,
+    ) -> list[list[tuple[int, int] | None]]:
+        """Removes gap offsets from a list of offsets.
+        Args:
+            all_offsets (list[list[tuple[int, int] | None]]): The list of offsets to filter.
+            has_bos_token (bool): Whether the token sequence has a beginning-of-sequence token.
+        Returns:
+            A list of offsets with gaps removed. The final gap offset is kept regardless of it being an EOS token
+            to handle end-of-sequence insertions.
+        """
+        return [
+            [
+                off
+                for idx, off in enumerate(offsets)
+                if off is not None or idx == len(offsets) - 1 or (idx == 0 and has_bos_token)
+            ]
+            for offsets in all_offsets
+        ]
+
+    @staticmethod
+    def _has_gaps(tokens: list[str], offsets: list[tuple[int, int] | None], gap_token="▁"):
+        """Checks if the tokens contain gaps.
+
+        Args:
+            tokens (list[list[str]]): The tokens to check.
+            offsets (list[list[tuple[int, int] | None]]): The offsets of the tokens.
+            gap_token (str): The token used for gaps. Default: `▁`.
+
+        Returns:
+            True if gaps are present, False otherwise.
+        """
+        for idx, (token, offset) in enumerate(zip(tokens, offsets, strict=True)):
+            if idx % 2 == 0 and offset is not None:
+                return False
+            if idx > 0 and idx < len(tokens) - 1 and idx % 2 == 0 and token != gap_token:
+                return False
+        return True
 
 
 class WhitespaceTokenizer(Tokenizer):
@@ -145,12 +304,14 @@ class WhitespaceTokenizer(Tokenizer):
         return all_offsets
 
     def tokenize_with_offsets(
-        self, texts: str | list[str]
+        self, texts: str | list[str], add_gaps: bool = False, gap_token: str = "▁"
     ) -> tuple[list[list[str]], list[list[tuple[int, int] | None]]]:
         """Tokenizes the input texts and returns the character spans of the tokens.
 
         Args:
             texts (str | list[str]): The strings to tokenize.
+            add_gaps (bool): Whether gaps should be added before/after tokens and offsets.
+            gap_token (str): The token to use for gaps. Default: `▁`.
 
         Returns:
             The tokens of the input texts, and tuples (start_idx, end_idx) marking the position of tokens
@@ -158,6 +319,8 @@ class WhitespaceTokenizer(Tokenizer):
         """
         tokens = self.transform(texts)
         offsets = self._get_offsets(tokens)
+        if add_gaps:
+            tokens, offsets = self._add_gaps_to_tokens_and_offsets(tokens, offsets, gap_token=gap_token)
         return tokens, offsets
 
 
@@ -206,12 +369,14 @@ class WordBoundaryTokenizer(Tokenizer):
         return [self._detokenize_str(sentence) for sentence in tokens]
 
     def tokenize_with_offsets(
-        self, texts: str | list[str]
+        self, texts: str | list[str], add_gaps: bool = False, gap_token: str = "▁"
     ) -> tuple[list[list[str]], list[list[tuple[int, int] | None]]]:
         """Tokenizes the input texts and returns the character spans of the tokens.
 
         Args:
-            texts (str | list[str]): The texts to tokenize.
+            texts (str | list[str]): The strings to tokenize.
+            add_gaps (bool): Whether gaps should be added before/after tokens and offsets.
+            gap_token (str): The token to use for gaps. Default: `▁`.
 
         Returns:
             The tokens of the input texts, and tuples (start_idx, end_idx) marking the position of tokens
@@ -231,6 +396,8 @@ class WordBoundaryTokenizer(Tokenizer):
         assert all(len(t) == len(c) for t, c in zip(tokens, all_offsets, strict=True)), (
             "Token and char span lengths do not match."
         )
+        if add_gaps:
+            tokens, all_offsets = self._add_gaps_to_tokens_and_offsets(tokens, all_offsets, gap_token=gap_token)
         return tokens, all_offsets
 
 
@@ -280,12 +447,14 @@ class HuggingfaceTokenizer(Tokenizer):
         ]
 
     def tokenize_with_offsets(
-        self, texts: str | list[str]
+        self, texts: str | list[str], add_gaps: bool = False, gap_token: str = "▁"
     ) -> tuple[list[list[str]], list[list[tuple[int, int] | None]]]:
         """Tokenizes the input texts and returns the character spans of the tokens.
 
         Args:
-            texts (str | list[str]): The texts to tokenize.
+            texts (str | list[str]): The strings to tokenize.
+            add_gaps (bool): Whether gaps should be added before/after tokens and offsets.
+            gap_token (str): The token to use for gaps. Default: `▁`.
 
         Returns:
             The tokens of the input texts, and the character spans of the tokens.
@@ -296,16 +465,20 @@ class HuggingfaceTokenizer(Tokenizer):
         if isinstance(texts, str):
             texts = [texts]
         all_tokens = []
-        all_char_spans = []
+        all_offsets = []
         for sentence in texts:
             encoding: BatchEncoding = self.transform.tokenizer(text_target=sentence, return_offsets_mapping=True)
             tokens = encoding.tokens()
-            char_spans = [tup if tup[0] != 0 or tup[1] != 0 else None for tup in encoding.offset_mapping]
-            char_spans = cast(list[tuple[int, int] | None], char_spans)
-            assert len(tokens) == len(char_spans), "Token and char span lengths do not match."
+            offsets = [tup if tup[0] != 0 or tup[1] != 0 else None for tup in encoding.offset_mapping]
+            offsets = cast(list[tuple[int, int] | None], offsets)
+            assert len(tokens) == len(offsets), "Token and char span lengths do not match."
             all_tokens.append(tokens)
-            all_char_spans.append(char_spans)
-        return all_tokens, all_char_spans
+            all_offsets.append(offsets)
+        if add_gaps:
+            all_tokens, all_offsets = self._add_gaps_to_tokens_and_offsets(
+                all_tokens, all_offsets, gap_token=gap_token
+            )
+        return all_tokens, all_offsets
 
 
 def get_tokenizer(

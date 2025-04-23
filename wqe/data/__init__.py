@@ -1,11 +1,12 @@
-from wqe.data.tokenizer import HuggingfaceTokenizer, WhitespaceTokenizer, WordBoundaryTokenizer
-from wqe.data.wqe_dataset import WQEDataset
-from wqe.data.wqe_entry import WQEEntry
+from wqe.data.edited_dataset import EditedDataset
+from wqe.data.edited_entry import EditedEntry, MultiEditedEntry
+from wqe.data.labeled_dataset import LabeledDataset
+from wqe.data.labeled_entry import LabeledEntry
 
 __all__ = [
-    "WQEEntry",
-    "WhitespaceTokenizer",
-    "WordBoundaryTokenizer",
-    "HuggingfaceTokenizer",
-    "WQEDataset",
+    "LabeledEntry",
+    "EditedEntry",
+    "MultiEditedEntry",
+    "LabeledDataset",
+    "EditedDataset",
 ]

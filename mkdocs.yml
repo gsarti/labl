@@ -9,11 +9,12 @@ nav:
   - Home: index.md
   - Quickstart: notebooks/quickstart.ipynb
   - API Reference:
+    - Utils:
+      - Base Classes: api/utils/utils.md
+      - Tokenizer: api/utils/tokenizer.md
     - Data:
-      - Data Utils: api/data/utils.md
-      - Tokenizer: api/data/tokenizer.md
-      - WQEEntry: api/data/wqe_entry.md
-      - WQEDataset: api/data/wqe_dataset.md
+      - Entry: api/data/entry.md
+      - Dataset: api/data/dataset.md
 
 plugins:
   - search

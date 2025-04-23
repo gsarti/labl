@@ -1,37 +1,18 @@
-# Data Utils
-
-## 🔀 Mixins
-
-::: wqe.data.mixin.AlignedSequencesMixin
-    handler: python
-    options:
-      show_root_heading: true
-      show_source: false
-      members:
-      - aligned
-      - aligned_char
-      - aligned_str
-      - aligned_char_str
+# Utility Classes
 
 ## 🔤 Spans
 
-::: wqe.data.span.BaseSpan
+::: wqe.utils.span.Span
     handler: python
     options:
       show_root_heading: true
       show_source: false
       members:
-      - load
+      - from_dict
       - from_list
       - to_dict
 
-::: wqe.data.span.Span
-    handler: python
-    options:
-      show_root_heading: true
-      show_source: false
-
-::: wqe.data.span.EditSpan
+::: wqe.utils.span.SpanList
     handler: python
     options:
       show_root_heading: true
@@ -39,25 +20,31 @@
 
 ## 🔠 Tokens
 
-::: wqe.data.token.LabeledToken
+::: wqe.utils.token.LabeledToken
     handler: python
     options:
       show_root_heading: true
       show_source: false
       members:
-      - to_tuple
       - from_tuple
       - from_list
+      - to_tuple
+
+::: wqe.utils.token.LabeledTokenList
+    handler: python
+    options:
+      show_root_heading: true
+      show_source: false
 
 ## 🔄 Transforms
 
-::: wqe.data.transform.RegexReduceToListOfListOfWords
+::: wqe.utils.transform.RegexReduceToListOfListOfWords
     handler: python
     options:
       show_root_heading: true
       show_source: true
 
-::: wqe.data.transform.ReduceToListOfListOfTokens
+::: wqe.utils.transform.ReduceToListOfListOfTokens
     handler: python
     options:
       show_root_heading: true
@@ -65,7 +52,7 @@
 
 ## 🤝 Aggregation Functions
 
-::: wqe.data.aggregation.LabelAggregation
+::: wqe.utils.aggregation.LabelAggregation
     handler: python
     options:
       show_root_heading: true
@@ -73,13 +60,7 @@
       members:
       - __call__
 
-::: wqe.data.aggregation.label_count_aggregation
-    handler: python
-    options:
-      show_root_heading: true
-      show_source: true
-
-::: wqe.data.aggregation.label_sumlen_aggregation
+::: wqe.utils.aggregation.label_sum_aggregation
     handler: python
     options:
       show_root_heading: true

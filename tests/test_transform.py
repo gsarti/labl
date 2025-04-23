@@ -1,4 +1,4 @@
-from wqe.data.transform import ReduceToListOfListOfTokens, RegexReduceToListOfListOfWords
+from wqe.utils.transform import ReduceToListOfListOfTokens, RegexReduceToListOfListOfWords
 
 
 def test_regex_reduce_init():

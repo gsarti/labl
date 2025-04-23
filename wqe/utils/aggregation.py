@@ -2,9 +2,9 @@
 
 Label aggregation is useful in the following scenarios:
 
-1. Span -> Token Label Propagation (`WQEEntry.get_tokens_from_spans`):
+1. Span -> Token Label Propagation (`LabeledEntry.get_tokens_from_spans`):
     A token might overlap with multiple spans, hence their labels should be aggregated over the token.
-2. Gap merging for aligned sequences (`WQEEntry.merge_gap_annotations`):
+2. Gap merging for aligned sequences (`Tokenizer.merge_gap_annotations`):
     When special gap tokens that were inserted to hold insertion/deletions are merged to the right, their label should
     be combined with the label of the token to the right, if present.
 2. Summarizing multi-edit entries:
@@ -13,13 +13,17 @@ Label aggregation is useful in the following scenarios:
 """
 
 from collections.abc import Sequence
-from typing import Any, Protocol
+from typing import Any, Protocol, TypeVar
+
+from wqe.utils.typing import LabelType
+
+T = TypeVar("T", bound=LabelType)
 
 
 class LabelAggregation(Protocol):
     """Interface for label aggregation functions."""
 
-    def __call__(self, labels: Sequence[str | int | float | None]) -> Any:
+    def __call__(self, labels: Sequence[LabelType]) -> Any:
         """Aggregate the labels.
 
         Args:
@@ -31,11 +35,12 @@ class LabelAggregation(Protocol):
         ...
 
 
-def label_count_aggregation(labels: Sequence[str | int | float | None]) -> int:
-    """Aggregation function summarizing a set of labels by counting non-empty labels."""
-    return len([l for l in labels if l is not None])
-
-
-def label_sumlen_aggregation(labels: Sequence[str | int | float | None]) -> int:
-    """Aggregation function summarizing a set of labels by summing their lengths."""
-    return sum(len(str(l)) for l in labels if l is not None)
+def label_sum_aggregation(labels: Sequence[T]) -> T | None:
+    if not labels:
+        return None
+    out = labels[0]
+    for l in labels[1:]:
+        if type(l) is not type(out):
+            raise RuntimeError(f"Different types found during aggregation: {type(l)} and {type(out)}")
+        out += l  # type: ignore
+    return out

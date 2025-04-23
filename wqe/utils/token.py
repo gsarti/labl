@@ -1,7 +1,14 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
 
+from wqe.utils.typing import LabelType
+
 LabeledTokenInput = (
-    list[tuple[str, str | None]] | list[tuple[str, int | None]] | list[tuple[str, float | None]] | list["LabeledToken"]
+    list[tuple[str, str | None]]
+    | list[tuple[str, int | None]]
+    | list[tuple[str, float | None]]
+    | list["LabeledToken"]
+    | list[tuple[str, LabelType]]
 )
 
 
@@ -15,7 +22,7 @@ class LabeledToken:
     """
 
     token: str
-    label: str | int | float | None
+    label: LabelType
 
     def __str__(self):
         return f"({self.token}, {self.label})"
@@ -32,16 +39,16 @@ class LabeledToken:
         return (self.token, self.label)
 
     @classmethod
-    def from_tuple(cls, tup: tuple[str, str | int | float | None]) -> "LabeledToken":
+    def from_tuple(cls, tup: tuple[str, LabelType]) -> "LabeledToken":
         return cls(*tup)
 
     @classmethod
     def from_list(
         cls,
         lst: LabeledTokenInput,
-        keep_labels: list[str | int | float | None] = [],
-        ignore_labels: list[str | int | float | None] = [],
-    ) -> list["LabeledToken"]:
+        keep_labels: Sequence[LabelType] = [],
+        ignore_labels: Sequence[LabelType] = [],
+    ) -> "LabeledTokenList":
         out: LabeledTokenList = LabeledTokenList()
         for item in lst:
             if isinstance(item, tuple | list) and len(item) == 2:
@@ -72,10 +79,3 @@ class LabeledTokenList(list[LabeledToken]):
             + "\n"
         )
         return txt_toks + txt_labels
-
-
-class ListOfListsOfLabeledToken(list[LabeledTokenList]):
-    """Class for a list of lists of `LabeledToken`, with custom visualization."""
-
-    def __str__(self) -> str:
-        return "\n".join(str(lst) for lst in self)
