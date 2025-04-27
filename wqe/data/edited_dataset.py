@@ -1,19 +1,21 @@
+from collections.abc import Callable, Sequence
 from typing import Any, cast
 
 from tqdm import tqdm
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
 from transformers.utils import is_pandas_available
 
-from wqe.data.base_dataset import BaseDataset
-from wqe.data.edited_entry import EditedEntry, MultiEditedEntry
+from wqe.data.base_sequence import BaseEntryDataset
+from wqe.data.edited_entry import EditedEntry, MultiEditEntry
 from wqe.utils.tokenizer import Tokenizer, get_tokenizer
+from wqe.utils.typing import LabelType
 
 
-class EditedDataset(BaseDataset[EditedEntry | MultiEditedEntry]):
-    """Dataset class for handling collections of `EditedEntry` and `MultiEditedEntry` objects.
+class EditedDataset(BaseEntryDataset[EditedEntry]):
+    """Dataset class for handling collections of `EditedEntry` and `MultiEditEntry` objects.
 
     Attributes:
-        data (list[EditedEntry] | list[MultiEditedEntry]): A list of `EditedEntry` or `MultiEditedEntry` objects.
+        data (list[EditedEntry] | list[MultiEditEntry]): A list of `EditedEntry` or `MultiEditEntry` objects.
     """
 
     ### Constructors ###
@@ -141,3 +143,17 @@ class EditedDataset(BaseDataset[EditedEntry | MultiEditedEntry]):
             del_label=del_label,
             gap_token=gap_token,
         )
+
+    ### Utility functions ###
+
+    def merge_gap_annotations(self, merge_fn: Callable[[Sequence[LabelType]], LabelType] | None = None) -> None:
+        """Merge gap annotations in the tokens of `orig` and `edit`.
+
+        Gap annotations are merged to the next non-gap token to the right, and the gap label is added to the label of
+        the non-gap token. The last gap is kept to account for insertions at the end of the text.
+
+        E.g. `GAP Hello GAP World GAP ! GAP` becomes `Hello World ! GAP`.
+             `  I     S   I               I`         `   IS     I     I`
+        """
+        for entry in self:
+            cast(EditedEntry | MultiEditEntry, entry).merge_gap_annotations(merge_fn=merge_fn)

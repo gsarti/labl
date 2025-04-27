@@ -65,3 +65,14 @@
     options:
       show_root_heading: true
       show_source: true
+
+## 🏷️ LabeledInterface
+
+::: wqe.data.labeled_interface.LabeledInterface
+    handler: python
+    options:
+      show_root_heading: true
+      show_source: true
+      members:
+      - label_types
+      - relabel

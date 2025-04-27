@@ -4,9 +4,12 @@ from logging import getLogger
 from textwrap import dedent, indent
 from warnings import warn
 
+import numpy as np
+import numpy.typing as npt
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
 
-from wqe.data.base_entry import BaseEntry
+from wqe.data.base_entry import BaseLabeledEntry
+from wqe.data.base_sequence import BaseMultiLabelEntry
 from wqe.utils.span import Span, SpanList
 from wqe.utils.token import LabeledToken, LabeledTokenList, LabelType
 from wqe.utils.tokenizer import Tokenizer, WhitespaceTokenizer, get_tokenizer
@@ -14,7 +17,7 @@ from wqe.utils.tokenizer import Tokenizer, WhitespaceTokenizer, get_tokenizer
 logger = getLogger(__name__)
 
 
-class LabeledEntry(BaseEntry):
+class LabeledEntry(BaseLabeledEntry):
     """Class for a text entry with a set of granular annotations over some of its parts.
 
     The class provides a centralized object to easily switch between different annotation formats:
@@ -38,8 +41,6 @@ class LabeledEntry(BaseEntry):
         tokens_offsets (list[tuple[int, int] | None]): Offsets for each token in `tokens`. The i-th element corresponds
             to the i-th token in `tokens`. The offsets are tuples of the form `(start, end)` corresponding to start and
             end positions of the token in `text`. If the token does not exist in `text`, the offset is `None`.
-        has_bos_token (bool): Whether the token sequence has a beginning-of-sequence token.
-        has_eos_token (bool): Whether the token sequence has an end-of-sequence token.
         label_types (list[type]): A list of the types of labels for the entry.
     """
 
@@ -54,8 +55,6 @@ class LabeledEntry(BaseEntry):
         tokens: list[str],
         tokens_labels: Sequence[LabelType],
         tokens_offsets: list[tuple[int, int] | None],
-        has_bos_token: bool = False,
-        has_eos_token: bool = False,
         constructor_key: object | None = None,
     ):
         """Private constructor for `LabeledEntry`.
@@ -92,30 +91,74 @@ class LabeledEntry(BaseEntry):
         self._tokens = tokens
         self._tokens_labels = tokens_labels
         self._tokens_offsets = tokens_offsets
-        self._has_bos_token = has_bos_token
-        self._has_eos_token = has_eos_token
         self._label_types = self._get_label_types()
 
     def __str__(self) -> str:
-        tokens_str = str(self.labeled_tokens).replace("\n", "\n" + 8 * " ")
-        spans_str = str(self._spans).replace("\n", "\n" + 8 * " ").strip()
-        out_str = dedent(f"""\
+        return dedent(f"""\
           text:
         {indent(self._text, 7 * " ")}
-        tagged:
-        {indent(self._tagged, 7 * " ")}
-        tokens:
-        {indent(tokens_str, 7 * " ")}
-         spans:
-        {indent(spans_str, 7 * " ")}
-        """)
-        return out_str.strip()
+        {self._get_labeled_str()}
+        """).strip()
 
     ### Getters and Setters ###
 
     @property
+    def text(self) -> str:
+        """The input text. This is a read-only property."""
+        return self._text
+
+    @text.setter
+    def text(self, t: str):
+        raise RuntimeError("Cannot set the text after initialization")
+
+    @property
+    def spans(self) -> SpanList:
+        """Labeled spans of the text. This is a read-only property."""
+        return self._spans
+
+    @spans.setter
+    def spans(self, s: SpanList):
+        raise RuntimeError("Cannot set the spans after initialization")
+
+    @property
+    def tagged(self) -> str:
+        """The tagged version of the text. This is a read-only property."""
+        return self._tagged
+
+    @tagged.setter
+    def tagged(self, t: str):
+        raise RuntimeError("Cannot set the tagged text after initialization")
+
+    @property
+    def tokens(self) -> list[str]:
+        """The tokenized version of the text. This is a read-only property."""
+        return self._tokens
+
+    @tokens.setter
+    def tokens(self, t: list[str]):
+        raise RuntimeError("Cannot set the tokenized text after initialization")
+
+    @property
+    def tokens_labels(self) -> Sequence[LabelType]:
+        """The labels associated with the tokens. This is a read-only property."""
+        return self._tokens_labels
+
+    @tokens_labels.setter
+    def tokens_labels(self, t: Sequence[LabelType]):
+        raise RuntimeError("Cannot set token labels after initialization")
+
+    @property
+    def tokens_offsets(self) -> list[tuple[int, int] | None]:
+        """The offsets for each token in the text. This is a read-only property."""
+        return self._tokens_offsets
+
+    @tokens_offsets.setter
+    def tokens_offsets(self, t: list[tuple[int, int] | None]):
+        raise RuntimeError("Cannot set the tokenized text offsets after initialization")
+
+    @property
     def labeled_tokens(self) -> LabeledTokenList:
-        """Returns a list of `LabeledToken` objects joining `tokens` and `tokens_labels`, with improved visualization."""
+        """Returns a list of `LabeledToken` objects joining `tokens` and `tokens_labels` with custom visualization."""
         return LabeledToken.from_list(list(zip(self._tokens, self._tokens_labels, strict=True)))
 
     @labeled_tokens.setter
@@ -156,8 +199,6 @@ class LabeledEntry(BaseEntry):
             tokens=tokens,
             tokens_labels=tokens_labels,
             tokens_offsets=tokens_offsets,
-            has_bos_token=tokenizer.has_bos_token,
-            has_eos_token=tokenizer.has_eos_token,
             constructor_key=cls.__constructor_key,
         )
 
@@ -195,8 +236,6 @@ class LabeledEntry(BaseEntry):
             tokens=tokens,
             tokens_labels=tokens_labels,
             tokens_offsets=tokens_offsets,
-            has_bos_token=tokenizer.has_bos_token,
-            has_eos_token=tokenizer.has_eos_token,
             constructor_key=cls.__constructor_key,
         )
 
@@ -271,8 +310,6 @@ class LabeledEntry(BaseEntry):
             tokens=tokens,
             tokens_labels=labels,
             tokens_offsets=offsets,
-            has_bos_token=tokenizer.has_bos_token,
-            has_eos_token=tokenizer.has_eos_token,
             constructor_key=cls.__constructor_key,
         )
 
@@ -519,15 +556,61 @@ class LabeledEntry(BaseEntry):
             span.text = text[span.start : span.end]
         return spans
 
+    ### Utility Functions ###
+
+    def get_tokens(self) -> list[str]:
+        return self.tokens
+
+    def get_labels(self) -> Sequence[LabelType]:
+        return self.tokens_labels
+
     ### Helper Functions ###
+
+    def _get_labeled_str(self) -> str:
+        tokens_str = str(self.labeled_tokens).replace("\n", "\n" + 8 * " ")
+        spans_str = str(self._spans).replace("\n", "\n" + 8 * " ").strip()
+        out_str = f"""\
+        tagged:
+        {indent(self._tagged, 7 * " ")}
+        tokens:
+        {indent(tokens_str, 7 * " ")}
+        spans:
+        {indent(spans_str, 7 * " ")}
+        """
+        return out_str.strip()
 
     def _get_label_types(self) -> list[type]:
         return list({type(l) for l in self._tokens_labels if l is not None})
 
-    def _relabel(
+    def _relabel_attributes(
         self,
         relabel_fn: Callable[[LabelType], LabelType],
     ) -> None:
         self._tokens_labels = [relabel_fn(label) for label in self._tokens_labels]
         self._spans = SpanList([Span(span.start, span.end, relabel_fn(span.label)) for span in self._spans])
         self._tagged = self.get_tagged_from_spans(self._text, self._spans)
+
+    def _get_labels_array(
+        self,
+        items: "Sequence[LabeledEntry]",
+    ) -> npt.NDArray[np.str_ | np.integer | np.floating]:
+        labels_array = np.array([item.tokens_labels for item in items])
+        return np.where(labels_array == None, np.nan, labels_array)  # noqa: E711
+
+
+class MultiLabelEntry(BaseMultiLabelEntry[LabeledEntry]):
+    """Class for a list of `LabeledEntry` representing multiple labels over the same text."""
+
+    def __str__(self) -> str:
+        if len(self) == 0:
+            return "No entries available."
+        out_str = dedent(f"""\
+          text:
+        {indent(self[0].text, 7 * " ")}
+        """)
+        for i, entry in enumerate(self):
+            out_str += dedent(f"""\
+        === Entry #{i} ===
+        {entry._get_labeled_str()}
+        """)
+        return out_str.strip()

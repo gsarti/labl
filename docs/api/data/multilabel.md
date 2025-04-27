@@ -1,30 +1,25 @@
-# Dataset
-
-::: wqe.data.base_sequence.BaseEntryDataset
+::: wqe.data.base_sequence.BaseMultiLabelEntry
     handler: python
     options:
       show_root_heading: true
       show_source: true
       members:
+        - label_counts
+        - tokens_with_label_counts
         - get_agreement
 
-::: wqe.data.labeled_dataset.LabeledDataset
-    handler: python
-    options:
-      show_root_heading: true
-      show_source: true
-      members:
-        - from_spans
-        - from_tagged
-        - from_tokens
-        - get_label_agreement
 
-::: wqe.data.edited_dataset.EditedDataset
+::: wqe.data.labeled_entry.MultiLabelEntry
+    handler: python
+    options:
+      show_root_heading: true
+      show_source: true
+
+
+::: wqe.data.edited_entry.MultiEditEntry
     handler: python
     options:
       show_root_heading: true
       show_source: true
       members:
-        - from_edits
-        - from_edits_dataframe
         - merge_gap_annotations

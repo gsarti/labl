@@ -2,21 +2,23 @@ from collections.abc import Callable, Sequence
 from logging import getLogger
 from textwrap import dedent, indent
 
+import numpy as np
+import numpy.typing as npt
 from jiwer import WordOutput
 from jiwer.alignment import _construct_comparison_string
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
 
-from wqe.data.base_entry import BaseEntry
+from wqe.data.base_entry import BaseLabeledEntry
+from wqe.data.base_sequence import BaseMultiLabelEntry
 from wqe.data.labeled_entry import LabeledEntry
 from wqe.utils.jiwer_ext import process_words
-from wqe.utils.token import LabeledToken, LabeledTokenList
 from wqe.utils.tokenizer import Tokenizer, WhitespaceTokenizer, get_tokenizer
 from wqe.utils.typing import LabelType
 
 logger = getLogger(__name__)
 
 
-class EditedEntry(BaseEntry):
+class EditedEntry(BaseLabeledEntry):
     """Class for a pair of text entries (`orig` and `edit`) where word-level annotations are obtained from the aligned
         tokens of the two entries.
 
@@ -25,10 +27,9 @@ class EditedEntry(BaseEntry):
         edit (LabeledEntry): The edited entry.
         aligned (WordOutput): A `jiwer.WordOutput` with aligned tokens for `orig` and `edit`, using tokenized the
             provided tokenizer.
-        has_gaps (bool | None): Whether the token sequence has gaps. Gaps are used for text/edit pairs to mark the
-            positions of insertions and deletions in the original/edited texts, respectively. This is a bool only if
-            the entry was initialized with `.from_edits`, and is `None` otherwise. If `False`, it means gap annotations
-            were merged to the next token to the right.
+        has_gaps (bool): Whether the token sequence has gaps. Gaps are used for text/edit pairs to mark the
+            positions of insertions and deletions in the original/edited texts, respectively. If `False`, it means gap
+            annotations were merged to the next token to the right.
     """
 
     # Private constructor key to prevent direct instantiation
@@ -57,9 +58,9 @@ class EditedEntry(BaseEntry):
                  `EditedEntry.from_edits(text=..., edits=...)`.
                 """)
             )
-        self._aligned = aligned
         self._orig = orig
         self._edit = edit
+        self._aligned = aligned
         self._has_gaps = has_gaps
         self._has_bos_token = has_bos_token
         self._has_eos_token = has_eos_token
@@ -72,9 +73,65 @@ class EditedEntry(BaseEntry):
         {self._get_edit_str()}
         """).strip()
 
+    ### Getters and Setters ###
+
+    @property
+    def orig(self) -> LabeledEntry:
+        """The `LabeledEntry` for the original text."""
+        return self._orig
+
+    @orig.setter
+    def orig(self, t: LabeledEntry):
+        raise RuntimeError("Cannot set original entry.")
+
+    @property
+    def edit(self) -> LabeledEntry:
+        """The `LabeledEntry` entry for the edited text."""
+        return self._edit
+
+    @edit.setter
+    def edit(self, t: LabeledEntry):
+        raise RuntimeError("Cannot set edited entry.")
+
+    @property
+    def aligned(self) -> WordOutput:
+        """Aligned output using `jiwer` for `orig` and `edit`."""
+        return self._aligned
+
+    @aligned.setter
+    def aligned(self, t: WordOutput):
+        raise RuntimeError("Cannot set aligned tokens.")
+
+    @property
+    def has_gaps(self) -> bool:
+        """Boolean flag marking whether the token sequence has added gaps for insertion/deletion annotations."""
+        return self._has_gaps
+
+    @has_gaps.setter
+    def has_gaps(self, t: bool):
+        raise RuntimeError("Cannot set gaps.")
+
+    @property
+    def has_bos_token(self) -> bool:
+        """Boolean flag marking whether the tokenizer has a beginning-of-sequence token."""
+        return self._has_bos_token
+
+    @has_bos_token.setter
+    def has_bos_token(self, t: bool):
+        raise RuntimeError("Cannot set beginning-of-sequence token.")
+
+    @property
+    def has_eos_token(self) -> bool:
+        """Boolean flag marking whether the tokenizer has an end-of-sequence token."""
+        return self._has_eos_token
+
+    @has_eos_token.setter
+    def has_eos_token(self, t: bool):
+        raise RuntimeError("Cannot set end-of-sequence token.")
+
     @property
     def aligned_str(self) -> str:
-        """Returns the aligned string at the token level with [`jiwer.visualize_alignment`](https://jitsi.github.io/jiwer/reference/alignment/#alignment.visualize_alignment)."""
+        """Aligned string at the token level with [`jiwer.visualize_alignment`](https://jitsi.github.io/jiwer/reference/alignment/#alignment.visualize_alignment)."""
         aligned_str_out = ""
         aligned_str = _construct_comparison_string(
             self._aligned.references[0],
@@ -82,7 +139,7 @@ class EditedEntry(BaseEntry):
             self._aligned.alignments[0],
             include_space_seperator=True,
         )
-        aligned_str = aligned_str.replace("REF:", "TEXT:", 1).replace("HYP:", "EDIT:", 1)
+        aligned_str = aligned_str.replace("REF:", "ORIG:", 1).replace("HYP:", "EDIT:", 1)
         lines = aligned_str.split("\n")
         lines[2] = " " + lines[2]
         aligned_str = "\n".join(lines)
@@ -107,8 +164,8 @@ class EditedEntry(BaseEntry):
         ins_label: str = "I",
         del_label: str = "D",
         gap_token: str = "▁",
-    ) -> "EditedEntry | MultiEditedEntry":
-        """Create a `EditedEntry` or an `MultiEditedEntry` from a text and one or more edits.
+    ) -> "EditedEntry | MultiEditEntry":
+        """Create a `EditedEntry` or an `MultiEditEntry` from a text and one or more edits.
 
         Args:
             text (str): The original text.
@@ -126,7 +183,7 @@ class EditedEntry(BaseEntry):
             gap_token (str): The token to use for gaps. Default: "▁".
 
         Returns:
-            A single `EditedEntry` if `edits` is a single string, otherwise an `MultiEditedEntry` with one entry per
+            A single `EditedEntry` if `edits` is a single string, otherwise an `MultiEditEntry` with one entry per
                 edit.
 
         Example:
@@ -143,9 +200,9 @@ class EditedEntry(BaseEntry):
                 },
             )
             print(entries[0].aligned_str)
-            >>> TEXT: ita_Latn ***** *** ▁a ▁simple ******* ***** * **** ***** ▁example </s>
+            >>> ORIG: ita_Latn ***** *** ▁a ▁simple ******* ***** * **** ***** ▁example </s>
                 EDIT: ita_Latn ▁this ▁is ▁a ▁simple ▁enough ▁test , ▁you ▁know        ? </s>
-                                I   I                  I     I I    I     I        S
+                                   I   I                  I     I I    I     I        S
             ```
         """
         tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
@@ -158,7 +215,7 @@ class EditedEntry(BaseEntry):
         all_edits_tokens_with_gaps, all_edits_offsets_with_gaps = tokenizer._add_gaps_to_tokens_and_offsets(
             all_edits_tokens, all_edits_offsets, gap_token=gap_token
         )
-        entries = MultiEditedEntry()
+        entries = MultiEditEntry()
         for edit, e_tokens, e_offsets, e_tokens_with_gaps, e_offsets_with_gaps in zip(
             edits,
             all_edits_tokens,
@@ -318,6 +375,12 @@ class EditedEntry(BaseEntry):
 
     ### Utility Methods ###
 
+    def get_tokens(self) -> list[str]:
+        return self.orig.tokens
+
+    def get_labels(self) -> Sequence[LabelType]:
+        return self.orig.tokens_labels
+
     def merge_gap_annotations(self, merge_fn: Callable[[Sequence[LabelType]], LabelType] | None = None) -> None:
         """Merge gap annotations in the tokens of `orig` and `edit`.
 
@@ -394,15 +457,42 @@ class EditedEntry(BaseEntry):
             {type(l) for l in list(self._orig._tokens_labels) + list(self._edit._tokens_labels) if l is not None}
         )
 
-    def _relabel(
+    def _relabel_attributes(
         self,
         relabel_fn: Callable[[LabelType], LabelType],
     ) -> None:
-        self._orig._relabel(relabel_fn=relabel_fn)
-        self._edit._relabel(relabel_fn=relabel_fn)
+        self._orig._relabel_attributes(relabel_fn=relabel_fn)
+        self._edit._relabel_attributes(relabel_fn=relabel_fn)
+
+    def _get_labels_array(
+        self,
+        items: "Sequence[EditedEntry]",
+    ) -> npt.NDArray[np.str_ | np.integer | np.floating]:
+        all_labels = []
+        for item in items:
+            item_labels = []
+            for idx, label in enumerate(item.orig.tokens_labels):
+                if self.has_gaps and idx % 2 == 0:
+                    # Gaps are kept to None (ignored in agreement computation)
+                    item_labels.append(label)
+                elif idx == 0 and item.has_bos_token or idx == len(item.orig.tokens_labels) - 1 and item.has_eos_token:
+                    # BOS/EOS tokens are not labeled
+                    item_labels.append(None)
+                else:
+                    # K = Keep is used to mark tokens that are not edited
+                    item_labels.append(label if label is not None else "K")
+            all_labels.append(item_labels)
+        labels_array = np.array(all_labels)
+        try:
+            return np.where(labels_array == None, np.nan, labels_array)  # noqa: E711
+        except Exception as e:
+            print(labels_array)
+            raise RuntimeError(
+                "Unable to convert labels to numpy array. Please check the labels and try again."
+            ) from e
 
 
-class MultiEditedEntry(list[EditedEntry], BaseEntry):
+class MultiEditEntry(BaseMultiLabelEntry[EditedEntry]):
     """Class for a list of `EditedEntry` representing multiple edits over the same `orig` text."""
 
     def __str__(self) -> str:
@@ -410,7 +500,7 @@ class MultiEditedEntry(list[EditedEntry], BaseEntry):
             return "No entries available."
         out_str = dedent(f"""\
           orig.text:
-        {indent(self[0]._orig._text, 12 * " ")}
+        {indent(self[0].orig.text, 12 * " ")}
         """)
         for i, entry in enumerate(self):
             out_str += dedent(f"""\
@@ -433,38 +523,3 @@ class MultiEditedEntry(list[EditedEntry], BaseEntry):
         """
         for entry in self:
             entry.merge_gap_annotations(merge_fn=merge_fn)
-
-    @property
-    def edits_counts(self) -> list[int]:
-        """Counts the number of edits for each token in the original text."""
-        if not self:
-            raise RuntimeError("No entries available.")
-        per_token_labels: zip[tuple[LabelType, ...]] = zip(*[e._orig._tokens_labels for e in self], strict=True)
-        return [sum([1 for lab in tok_labels if lab is not None]) for tok_labels in per_token_labels]
-
-    @property
-    def tokens_with_edits_counts(self) -> LabeledTokenList:
-        """Returns a list of `LabeledToken` with the number of edits for each token in the original text."""
-        if not self:
-            raise RuntimeError("No entries available.")
-        return LabeledToken.from_list(list(zip(self[0]._orig._tokens, self.edits_counts, strict=True)))
-
-    ### Helper Functions ###
-
-    def _get_label_types(self) -> list[type]:
-        label_types = []
-        for entry in self:
-            label_types.extend(entry._get_label_types())
-        return list(set(label_types))
-
-    def _relabel(self, relabel_fn: Callable[[LabelType], LabelType]) -> None:
-        """Relabels the entry in-place using a custom relabeling function.
-
-        Args:
-            relabel_fn (Callable[[str | int | float | None], str | int | float | None]):
-                A function that will be applied to each label in the entry.
-                The function should take a single argument (the label) and return the new label.
-                The function should return the label without any processing if the label should be preserved.
-        """
-        for entry in self:
-            entry._relabel(relabel_fn=relabel_fn)

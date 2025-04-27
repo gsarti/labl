@@ -12,8 +12,10 @@ nav:
     - Utils:
       - Base Classes: api/utils/utils.md
       - Tokenizer: api/utils/tokenizer.md
+      - Agreement: api/utils/agreement.md
     - Data:
       - Entry: api/data/entry.md
+      - MultiLabelEntry: api/data/multilabel.md
       - Dataset: api/data/dataset.md
 
 plugins:

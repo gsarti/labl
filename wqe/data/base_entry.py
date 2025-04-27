@@ -1,83 +1,33 @@
-from abc import abstractmethod
-from collections.abc import Callable
-from inspect import isroutine
+from abc import ABC, abstractmethod
+from collections.abc import Callable, Sequence
+from typing import TypeVar
 
+import numpy as np
+import numpy.typing as npt
+from krippendorff.krippendorff import LevelOfMeasurement
+
+from wqe.data.labeled_interface import LabeledInterface
+from wqe.utils.agreement import AgreementOutput, get_labels_agreement
 from wqe.utils.typing import LabelType
 
+EntryType = TypeVar("EntryType", bound="BaseLabeledEntry")
 
-class BaseEntry:
+
+class BaseLabeledEntry(LabeledInterface, ABC):
     """Base class for all data entries. This class handles the creation of public getters, disallowing setting and
     providing a private constructor key to prevent direct instantiation.
     """
 
-    _label_types: list[type]
-
-    def __init_subclass__(cls, **kwargs):
-        """
-        Class decorator to automatically create getters for private attributes.
-        Setting private attributes is disallowed for children classes.
-
-        Example: An attribute `_name` will get a public property `name`.
-        """
-        potential_attrs = set(vars(cls).keys())
-        if hasattr(cls, "__annotations__"):
-            potential_attrs.update(cls.__annotations__.keys())
-
-        private_attr_names = [
-            name
-            for name in potential_attrs
-            if name.startswith("_")
-            and not name.startswith("__")
-            and not isroutine(getattr(cls, name))  # Exclude helper methods
-        ]
-
-        for private_name in private_attr_names:
-            public_name = private_name.lstrip("_")
-
-            # Safety check: Don't overwrite something that already exists with the public name
-            if hasattr(cls, public_name):
-                print(
-                    f"Warning: Attribute/method '{public_name}' already exists in class "
-                    f"'{cls.__name__}'. Skipping property creation for '{private_name}'."
-                )
-                continue
-
-            def make_getter(public_name, p_name):
-                def getter(self):
-                    return getattr(self, p_name)
-
-                getter.__doc__ = f"Getter for the '{public_name}' property, accessing '{p_name}'."
-                return getter
-
-            def make_disabled_setter():
-                def setter(self, value):
-                    raise RuntimeError(
-                        f"{cls.__name__} instances cannot be modified after initialization. "
-                        f"Create a new instance of '{cls.__name__}' instead."
-                    )
-
-                return setter
-
-            prop = property(
-                fget=make_getter(public_name, private_name),
-                fset=make_disabled_setter(),
-                doc=f"Property to access the private attribute '{private_name}'.",
-            )
-            setattr(cls, public_name, prop)
-
-    ### Helper Functions ###
-
-    @abstractmethod
-    def _get_label_types(self) -> list[type]:
-        pass
-
-    @abstractmethod
-    def _relabel(self, relabel_fn: Callable[[LabelType], LabelType]) -> None:
-        pass
-
     ### Utility Functions ###
 
     @abstractmethod
+    def get_tokens(self) -> list[str]:
+        pass
+
+    @abstractmethod
+    def get_labels(self) -> Sequence[LabelType]:
+        pass
+
     def relabel(
         self,
         relabel_fn: Callable[[LabelType], LabelType] | None = None,
@@ -98,5 +48,37 @@ class BaseEntry:
             if relabel_map is None:
                 raise ValueError("Either relabel_fn or relabel_map must be provided.")
             relabel_fn = lambda x: x if x is None or isinstance(x, float) else relabel_map.get(x, x)
-        self._relabel(relabel_fn)
+        self._relabel_attributes(relabel_fn)
         self._label_types = self._get_label_types()
+
+    def get_agreement(
+        self: EntryType,
+        other: EntryType,
+        level_of_measurement: LevelOfMeasurement | None = None,
+    ) -> AgreementOutput:
+        """Compute the inter-annotator agreement for the token labels of two entries using
+        [Krippendorff's alpha](https://en.wikipedia.org/wiki/Krippendorff%27s_alpha).
+        """
+        self._validate_single_label_type()
+        other._validate_single_label_type()
+        if self.label_types[0] != other.label_types[0]:
+            raise RuntimeError(
+                f"Label type does not match: {self.label_types[0]} vs {other.label_types[0]}.\n"
+                "Transform the annotations using `.relabel` to ensure a single type is present."
+            )
+        labels_array = self._get_labels_array([self, other]).astype(self.label_types[0])
+        return get_labels_agreement(
+            label_type=self.label_types[0],
+            labels_array=labels_array,
+            level_of_measurement=level_of_measurement,
+        )
+
+    ### Helper Functions ###
+
+    @abstractmethod
+    def _relabel_attributes(self, relabel_fn: Callable[[LabelType], LabelType]) -> None:
+        pass
+
+    @abstractmethod
+    def _get_labels_array(self, items: Sequence[EntryType]) -> npt.NDArray[np.str_ | np.integer | np.floating]:
+        pass
