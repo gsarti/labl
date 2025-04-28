@@ -1,6 +1,6 @@
 # Dataset
 
-::: labl.data.base_sequence.BaseEntryDataset
+::: labl.data.base_sequence.BaseLabeledDataset
     handler: python
     options:
       show_root_heading: true

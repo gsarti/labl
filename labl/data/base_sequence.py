@@ -110,7 +110,7 @@ class BaseMultiLabelEntry(BaseLabeledSequence[EntryType], ABC):
         return self[0]._get_labels_array(self, dtype)
 
 
-class BaseEntryDataset(BaseLabeledSequence[EntryType | BaseMultiLabelEntry[EntryType]], ABC):
+class BaseLabeledDataset(BaseLabeledSequence[EntryType | BaseMultiLabelEntry[EntryType]], ABC):
     """Base class for all dataset classes containing `BaseLabeledEntry` objects."""
 
     ### Utility Functions ###

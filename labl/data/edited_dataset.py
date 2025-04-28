@@ -5,13 +5,13 @@ from tqdm import tqdm
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
 from transformers.utils import is_pandas_available
 
-from labl.data.base_sequence import BaseEntryDataset
+from labl.data.base_sequence import BaseLabeledDataset
 from labl.data.edited_entry import EditedEntry, MultiEditEntry
 from labl.utils.tokenizer import Tokenizer, get_tokenizer
 from labl.utils.typing import LabelType
 
 
-class EditedDataset(BaseEntryDataset[EditedEntry]):
+class EditedDataset(BaseLabeledDataset[EditedEntry]):
     """Dataset class for handling collections of `EditedEntry` and `MultiEditEntry` objects.
 
     Attributes:

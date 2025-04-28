@@ -9,7 +9,7 @@ def get_version():
         from labl import __version__ as version
     except ImportError:
         version = "unknown"
-    typer.echo(f"Labl version: {version}")
+    typer.echo(f"labl version: {version}")
 
 
 if __name__ == "__main__":

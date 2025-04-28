@@ -1,4 +1,4 @@
-site_name: Labl
+site_name: labl
 site_description: "Token-level Label Management Toolkit"
 copyright: "(c) 2025 Gabriele Sarti - All rights reserved."
 repo_name: "gsarti/labl"
@@ -130,7 +130,7 @@ extra:
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/gsarti/labl
-      name: Labl on Github
+      name: labl on Github
     - icon: fontawesome/brands/python
       link: https://pypi.org/project/labl
     - icon: fontawesome/brands/x-twitter
