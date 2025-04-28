@@ -1,4 +1,4 @@
-from wqe.utils.span import Span
+from labl.utils.span import Span
 
 
 def test_span_init():

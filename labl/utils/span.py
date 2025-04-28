@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 
-from wqe.utils.typing import LabelType
+from labl.utils.typing import LabelType
 
 
 @dataclass
@@ -56,8 +56,4 @@ class SpanList(list[Span]):
     """Class for a list of `Span`, with custom visualization."""
 
     def __str__(self):
-        out = ""
-        for idx, span in enumerate(self):
-            out += f"{idx}:\n"
-            out += str(span)
-        return out
+        return "\n".join(f"{idx}: {span}" for idx, span in enumerate(self))

@@ -5,10 +5,10 @@ from tqdm import tqdm
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
 from transformers.utils import is_pandas_available
 
-from wqe.data.base_sequence import BaseEntryDataset
-from wqe.data.edited_entry import EditedEntry, MultiEditEntry
-from wqe.utils.tokenizer import Tokenizer, get_tokenizer
-from wqe.utils.typing import LabelType
+from labl.data.base_sequence import BaseEntryDataset
+from labl.data.edited_entry import EditedEntry, MultiEditEntry
+from labl.utils.tokenizer import Tokenizer, get_tokenizer
+from labl.utils.typing import LabelType
 
 
 class EditedDataset(BaseEntryDataset[EditedEntry]):
@@ -66,7 +66,7 @@ class EditedDataset(BaseEntryDataset[EditedEntry]):
                     gap_token=gap_token,
                 )
                 for text, edit in tqdm(
-                    zip(texts, edits, strict=True), desc="Creating WQEDataset", total=len(texts), unit="entries"
+                    zip(texts, edits, strict=True), desc="Creating EditedDataset", total=len(texts), unit="entries"
                 )
             ]
         )
@@ -146,14 +146,21 @@ class EditedDataset(BaseEntryDataset[EditedEntry]):
 
     ### Utility functions ###
 
-    def merge_gap_annotations(self, merge_fn: Callable[[Sequence[LabelType]], LabelType] | None = None) -> None:
+    def merge_gap_annotations(
+        self,
+        merge_fn: Callable[[Sequence[LabelType]], LabelType] | None = None,
+        keep_final_gap: bool = True,
+    ) -> None:
         """Merge gap annotations in the tokens of `orig` and `edit`.
 
-        Gap annotations are merged to the next non-gap token to the right, and the gap label is added to the label of
-        the non-gap token. The last gap is kept to account for insertions at the end of the text.
+        This method is equivalent to calling `EditedEntry.from_edits` with `with_gaps=False`. Gap annotations are merged
+        to the next non-gap token to the right, and the gap label is added to the label of the non-gap token. The last
+        gap is kept to account for insertions at the end of the text.
 
         E.g. `GAP Hello GAP World GAP ! GAP` becomes `Hello World ! GAP`.
              `  I     S   I               I`         `   IS     I     I`
         """
         for entry in self:
-            cast(EditedEntry | MultiEditEntry, entry).merge_gap_annotations(merge_fn=merge_fn)
+            cast(EditedEntry | MultiEditEntry, entry).merge_gap_annotations(
+                merge_fn=merge_fn, keep_final_gap=keep_final_gap
+            )

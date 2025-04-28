@@ -6,9 +6,9 @@ import numpy as np
 import numpy.typing as npt
 from krippendorff.krippendorff import LevelOfMeasurement
 
-from wqe.data.labeled_interface import LabeledInterface
-from wqe.utils.agreement import AgreementOutput, get_labels_agreement
-from wqe.utils.typing import LabelType
+from labl.data.labeled_interface import LabeledInterface
+from labl.utils.agreement import AgreementOutput, get_labels_agreement
+from labl.utils.typing import LabelType
 
 EntryType = TypeVar("EntryType", bound="BaseLabeledEntry")
 
@@ -66,7 +66,7 @@ class BaseLabeledEntry(LabeledInterface, ABC):
                 f"Label type does not match: {self.label_types[0]} vs {other.label_types[0]}.\n"
                 "Transform the annotations using `.relabel` to ensure a single type is present."
             )
-        labels_array = self._get_labels_array([self, other]).astype(self.label_types[0])
+        labels_array = self._get_labels_array([self, other], dtype=self.label_types[0])
         return get_labels_agreement(
             label_type=self.label_types[0],
             labels_array=labels_array,
@@ -80,5 +80,7 @@ class BaseLabeledEntry(LabeledInterface, ABC):
         pass
 
     @abstractmethod
-    def _get_labels_array(self, items: Sequence[EntryType]) -> npt.NDArray[np.str_ | np.integer | np.floating]:
+    def _get_labels_array(
+        self, items: Sequence[EntryType], dtype: type | None = None
+    ) -> npt.NDArray[np.str_ | np.integer | np.floating]:
         pass

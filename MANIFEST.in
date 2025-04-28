@@ -4,7 +4,7 @@ include *.md
 include *.py
 include *.yaml
 include *.yml
-recursive-include wqe *.py
+recursive-include labl *.py
 
 exclude Makefile
 prune tests

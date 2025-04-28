@@ -1,6 +1,6 @@
 # Dataset
 
-::: wqe.data.base_sequence.BaseEntryDataset
+::: labl.data.base_sequence.BaseEntryDataset
     handler: python
     options:
       show_root_heading: true
@@ -8,7 +8,7 @@
       members:
         - get_agreement
 
-::: wqe.data.labeled_dataset.LabeledDataset
+::: labl.data.labeled_dataset.LabeledDataset
     handler: python
     options:
       show_root_heading: true
@@ -19,7 +19,7 @@
         - from_tokens
         - get_label_agreement
 
-::: wqe.data.edited_dataset.EditedDataset
+::: labl.data.edited_dataset.EditedDataset
     handler: python
     options:
       show_root_heading: true

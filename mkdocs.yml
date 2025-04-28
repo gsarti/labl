@@ -1,13 +1,15 @@
-site_name: WQE
-site_description: "Word-level Quality Estimation Toolkit"
+site_name: Labl
+site_description: "Token-level Label Management Toolkit"
 copyright: "(c) 2025 Gabriele Sarti - All rights reserved."
-repo_name: "gsarti/wqe"
-repo_url: http://github.com/gsarti/wqe
+repo_name: "gsarti/labl"
+repo_url: http://github.com/gsarti/labl
 
 # Set navigation here
 nav:
   - Home: index.md
   - Quickstart: notebooks/quickstart.ipynb
+  - Tutorials:
+    - Edit Analysis: notebooks/edit_analysis.ipynb
   - API Reference:
     - Utils:
       - Base Classes: api/utils/utils.md
@@ -55,7 +57,7 @@ plugins:
 theme:
   name: material
   custom_dir: docs/assets
-  logo: assets/img/wqe_logo.png
+  logo: assets/img/labl_logo.png
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
@@ -88,7 +90,7 @@ theme:
     - search.suggest
   icon:
     logo: logo
-  favicon: assets/img/wqe_logo.png
+  favicon: assets/img/labl_logo.png
   font:
     text: Roboto
     code: Roboto Mono
@@ -127,10 +129,10 @@ extra_javascript:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/gsarti/wqe
-      name: WQE on Github
+      link: https://github.com/gsarti/labl
+      name: Labl on Github
     - icon: fontawesome/brands/python
-      link: https://pypi.org/project/wqe
+      link: https://pypi.org/project/labl
     - icon: fontawesome/brands/x-twitter
       link: https://x.com/gsarti_
     - icon: fontawesome/brands/bluesky

@@ -3,7 +3,7 @@ requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "wqe"
+name = "labl"
 version = "0.1.0"
 description = "Word-level Quality Estimation Toolkit"
 readme = "README.md"
@@ -39,6 +39,8 @@ dependencies = [
   "jiwer>=3.1.0",
   "transformers>=4.42.0",
   "krippendorff>=0.8.1",
+  "scipy>=1.15.2",
+  "toml>=0.10.2",
 ]
 
 [project.optional-dependencies]
@@ -68,19 +70,19 @@ notebook = [
 ]
 
 [project.urls]
-homepage = "https://github.com/gsarti/wqe"
-documentation = "https://github.com/gsarti/wqe"
-repository = "https://github.com/gsarti/wqe"
-changelog = "https://github.com/gsarti/wqe/blob/main/CHANGELOG.md"
+homepage = "https://github.com/gsarti/labl"
+documentation = "https://github.com/gsarti/labl"
+repository = "https://github.com/gsarti/labl"
+changelog = "https://github.com/gsarti/labl/blob/main/CHANGELOG.md"
 
 [project.scripts]
-"wqe" = "wqe.commands.cli:app"
+"labl" = "labl.commands.cli:app"
 
 
 [tool.pytest.ini_options]
 # https://docs.pytest.org/en/6.2.x/customize.html#pyproject-toml
 # Directories that are not visited by pytest collector:
-pythonpath = ["wqe"]
+pythonpath = ["labl"]
 testpaths = "tests"
 python_files = "test_*.py"
 norecursedirs =["hooks", "*.egg", ".eggs", "dist", "build", "docs", ".tox", ".git", "__pycache__"]
@@ -100,7 +102,7 @@ addopts = [
 
 
 [tool.setuptools]
-packages = ["wqe"]
+packages = ["labl"]
 
 
 [tool.ruff]
@@ -124,7 +126,7 @@ exclude = [
 ]
 fix = true
 line-length = 119
-src = ["wqe", "examples", "tests"]
+src = ["labl", "examples", "tests"]
 extend-include = ["*.ipynb"]
 
 [tool.ruff.lint]
@@ -159,7 +161,7 @@ select = [
   "PLW", # flake8-pylint
 ]
 per-file-ignores = { "__init__.py" = ["F401"], "**/examples/*" = ["B018", "E402"] }
-isort = { known-first-party = ["wqe"], order-by-type = true}
+isort = { known-first-party = ["labl"], order-by-type = true}
 pylint = { max-branches = 22 }
 pyupgrade = { keep-runtime-typing = true }
 pydocstyle = { convention = "google" }

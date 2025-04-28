@@ -2,7 +2,7 @@ from typing import cast
 
 import pytest
 
-from wqe.data import EditedEntry, MultiEditEntry
+from labl.data import EditedEntry, MultiEditEntry
 
 
 def test_from_edits_gap_merging():

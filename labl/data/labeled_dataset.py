@@ -3,11 +3,11 @@ from collections.abc import Sequence
 from tqdm import tqdm
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
 
-from wqe.data.base_sequence import BaseEntryDataset
-from wqe.data.labeled_entry import LabeledEntry
-from wqe.utils.span import Span
-from wqe.utils.token import LabelType
-from wqe.utils.tokenizer import Tokenizer, get_tokenizer
+from labl.data.base_sequence import BaseEntryDataset
+from labl.data.labeled_entry import LabeledEntry
+from labl.utils.span import Span
+from labl.utils.token import LabelType
+from labl.utils.tokenizer import Tokenizer, get_tokenizer
 
 
 class LabeledDataset(BaseEntryDataset[LabeledEntry]):
@@ -121,6 +121,6 @@ class LabeledDataset(BaseEntryDataset[LabeledEntry]):
                     ignore_labels=ignore_labels,
                     tokenizer=tokenizer,
                 )
-                for idx in tqdm(range(len(tokens)), desc="Creating WQEDataset", total=len(tokens), unit="entries")
+                for idx in tqdm(range(len(tokens)), desc="Creating LabeledDataset", total=len(tokens), unit="entries")
             ]
         )

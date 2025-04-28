@@ -6,11 +6,11 @@ import numpy as np
 import numpy.typing as npt
 from krippendorff.krippendorff import LevelOfMeasurement
 
-from wqe.data.base_entry import BaseLabeledEntry, EntryType
-from wqe.data.labeled_interface import LabeledInterface, LabeledObject
-from wqe.utils.agreement import AgreementOutput, get_labels_agreement
-from wqe.utils.token import LabeledToken, LabeledTokenList
-from wqe.utils.typing import LabelType
+from labl.data.base_entry import BaseLabeledEntry, EntryType
+from labl.data.labeled_interface import LabeledInterface, LabeledObject
+from labl.utils.agreement import AgreementOutput, get_labels_agreement
+from labl.utils.token import LabeledToken, LabeledTokenList
+from labl.utils.typing import LabelType
 
 SequenceType = TypeVar("SequenceType", bound="BaseLabeledSequence")
 
@@ -61,7 +61,7 @@ class BaseLabeledSequence(LabeledInterface, list[LabeledObject], ABC):
         return list(types)
 
     @abstractmethod
-    def _get_labels_array(self) -> npt.NDArray[np.str_ | np.integer | np.floating]:
+    def _get_labels_array(self, dtype: type | None = None) -> npt.NDArray[np.str_ | np.integer | np.floating]:
         pass
 
 
@@ -95,7 +95,7 @@ class BaseMultiLabelEntry(BaseLabeledSequence[EntryType], ABC):
         [Krippendorff's alpha](https://en.wikipedia.org/wiki/Krippendorff%27s_alpha).
         """
         self._validate_single_label_type()
-        labels_array = self._get_labels_array().astype(self.label_types[0])
+        labels_array = self._get_labels_array(dtype=self.label_types[0])
         return get_labels_agreement(
             label_type=self.label_types[0],
             labels_array=labels_array,
@@ -104,10 +104,10 @@ class BaseMultiLabelEntry(BaseLabeledSequence[EntryType], ABC):
 
     ### Helper Functions ###
 
-    def _get_labels_array(self) -> npt.NDArray[np.str_ | np.integer | np.floating]:
+    def _get_labels_array(self, dtype: type | None = None) -> npt.NDArray[np.str_ | np.integer | np.floating]:
         if not self:
             raise RuntimeError("No entries available.")
-        return self[0]._get_labels_array(self)
+        return self[0]._get_labels_array(self, dtype)
 
 
 class BaseEntryDataset(BaseLabeledSequence[EntryType | BaseMultiLabelEntry[EntryType]], ABC):
@@ -131,7 +131,7 @@ class BaseEntryDataset(BaseLabeledSequence[EntryType | BaseMultiLabelEntry[Entry
                     f"Label type does not match: {self.label_types[0]} vs {other.label_types[0]}.\n"
                     "Transform the annotations using `.relabel` to ensure a single type is present."
                 )
-        labels_array = self._get_labels_array(other=other).astype(self.label_types[0])
+        labels_array = self._get_labels_array(other=other, dtype=self.label_types[0])
         return get_labels_agreement(
             label_type=self.label_types[0],
             labels_array=labels_array,
@@ -140,13 +140,17 @@ class BaseEntryDataset(BaseLabeledSequence[EntryType | BaseMultiLabelEntry[Entry
 
     ### Helper Functions ###
 
-    def _get_labels_array(self, other=None) -> npt.NDArray[np.str_ | np.integer | np.floating]:
+    def _get_labels_array(
+        self, dtype: type | None = None, other=None
+    ) -> npt.NDArray[np.str_ | np.integer | np.floating]:
         if not self:
             raise RuntimeError("No entries available.")
         is_multiedit_only = all(isinstance(entry, BaseMultiLabelEntry) for entry in self)
         is_single_edit_only = all(isinstance(entry, BaseLabeledEntry) for entry in self)
         if is_multiedit_only:
-            return np.concat([entry._get_labels_array() for entry in cast(list[BaseMultiLabelEntry], self)], axis=1)
+            return np.concat(
+                [entry._get_labels_array(dtype) for entry in cast(list[BaseMultiLabelEntry], self)], axis=1
+            )
         elif is_single_edit_only:
             if other is None:
                 raise RuntimeError("`other` must be provided for datasets of single-label entries.")
@@ -162,7 +166,7 @@ class BaseEntryDataset(BaseLabeledSequence[EntryType | BaseMultiLabelEntry[Entry
                 raise RuntimeError("Tokens of all `self` and `other` entries must be the same to extract labels. ")
             return np.concatenate(
                 [
-                    self_entry._get_labels_array([self_entry, other_entry])
+                    self_entry._get_labels_array([self_entry, other_entry], dtype).astype(self.label_types[0])
                     for self_entry, other_entry in zip(self_entries, other_entries, strict=True)
                 ],
                 axis=1,

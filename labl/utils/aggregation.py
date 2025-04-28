@@ -15,7 +15,7 @@ Label aggregation is useful in the following scenarios:
 from collections.abc import Sequence
 from typing import Any, Protocol, TypeVar
 
-from wqe.utils.typing import LabelType
+from labl.utils.typing import LabelType
 
 T = TypeVar("T", bound=LabelType)
 

@@ -2,7 +2,7 @@
 
 ## 🔤 Spans
 
-::: wqe.utils.span.Span
+::: labl.utils.span.Span
     handler: python
     options:
       show_root_heading: true
@@ -12,7 +12,7 @@
       - from_list
       - to_dict
 
-::: wqe.utils.span.SpanList
+::: labl.utils.span.SpanList
     handler: python
     options:
       show_root_heading: true
@@ -20,7 +20,7 @@
 
 ## 🔠 Tokens
 
-::: wqe.utils.token.LabeledToken
+::: labl.utils.token.LabeledToken
     handler: python
     options:
       show_root_heading: true
@@ -30,7 +30,7 @@
       - from_list
       - to_tuple
 
-::: wqe.utils.token.LabeledTokenList
+::: labl.utils.token.LabeledTokenList
     handler: python
     options:
       show_root_heading: true
@@ -38,13 +38,13 @@
 
 ## 🔄 Transforms
 
-::: wqe.utils.transform.RegexReduceToListOfListOfWords
+::: labl.utils.transform.RegexReduceToListOfListOfWords
     handler: python
     options:
       show_root_heading: true
       show_source: true
 
-::: wqe.utils.transform.ReduceToListOfListOfTokens
+::: labl.utils.transform.ReduceToListOfListOfTokens
     handler: python
     options:
       show_root_heading: true
@@ -52,7 +52,7 @@
 
 ## 🤝 Aggregation Functions
 
-::: wqe.utils.aggregation.LabelAggregation
+::: labl.utils.aggregation.LabelAggregation
     handler: python
     options:
       show_root_heading: true
@@ -60,7 +60,7 @@
       members:
       - __call__
 
-::: wqe.utils.aggregation.label_sum_aggregation
+::: labl.utils.aggregation.label_sum_aggregation
     handler: python
     options:
       show_root_heading: true
@@ -68,7 +68,7 @@
 
 ## 🏷️ LabeledInterface
 
-::: wqe.data.labeled_interface.LabeledInterface
+::: labl.data.labeled_interface.LabeledInterface
     handler: python
     options:
       show_root_heading: true

@@ -15,7 +15,7 @@ help:
 	@echo "test            : run all tests."
 	@echo "build-docs      : build mkdocs documentation."
 	@echo "serve-docs      : serve documentation locally."
-	@echo "deploy-docs     : deploy documentation to https://gsarti.com/wqe (gh-pages branch)"
+	@echo "deploy-docs     : deploy documentation to https://gsarti.com/labl (gh-pages branch)"
 	@echo "docs            : shortcut to build and serve generated documentation locally."
 	@echo "clean           : cleans all unecessary files."
 

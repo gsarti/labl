@@ -1,4 +1,4 @@
-::: wqe.data.base_sequence.BaseMultiLabelEntry
+::: labl.data.base_sequence.BaseMultiLabelEntry
     handler: python
     options:
       show_root_heading: true
@@ -9,14 +9,14 @@
         - get_agreement
 
 
-::: wqe.data.labeled_entry.MultiLabelEntry
+::: labl.data.labeled_entry.MultiLabelEntry
     handler: python
     options:
       show_root_heading: true
       show_source: true
 
 
-::: wqe.data.edited_entry.MultiEditEntry
+::: labl.data.edited_entry.MultiEditEntry
     handler: python
     options:
       show_root_heading: true

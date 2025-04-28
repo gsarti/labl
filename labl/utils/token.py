@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from wqe.utils.typing import LabelType
+from labl.utils.typing import LabelType
 
 LabeledTokenInput = (
     list[tuple[str, str | None]]

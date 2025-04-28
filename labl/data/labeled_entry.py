@@ -8,11 +8,11 @@ import numpy as np
 import numpy.typing as npt
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
 
-from wqe.data.base_entry import BaseLabeledEntry
-from wqe.data.base_sequence import BaseMultiLabelEntry
-from wqe.utils.span import Span, SpanList
-from wqe.utils.token import LabeledToken, LabeledTokenList, LabelType
-from wqe.utils.tokenizer import Tokenizer, WhitespaceTokenizer, get_tokenizer
+from labl.data.base_entry import BaseLabeledEntry
+from labl.data.base_sequence import BaseMultiLabelEntry
+from labl.utils.span import Span, SpanList
+from labl.utils.token import LabeledToken, LabeledTokenList, LabelType
+from labl.utils.tokenizer import Tokenizer, WhitespaceTokenizer, get_tokenizer
 
 logger = getLogger(__name__)
 
@@ -278,7 +278,7 @@ class LabeledEntry(BaseLabeledEntry):
 
         Example:
             ```python
-            from wqe.data.labeled_entry import LabeledEntry
+            from labl.data.labeled_entry import LabeledEntry
 
             entry = LabeledEntry.from_tokens(
                 labeled_tokens=[
@@ -593,9 +593,10 @@ class LabeledEntry(BaseLabeledEntry):
     def _get_labels_array(
         self,
         items: "Sequence[LabeledEntry]",
+        dtype: type | None = None,
     ) -> npt.NDArray[np.str_ | np.integer | np.floating]:
-        labels_array = np.array([item.tokens_labels for item in items])
-        return np.where(labels_array == None, np.nan, labels_array)  # noqa: E711
+        labels_array = np.array([[lab if lab is not None else np.nan for lab in item.tokens_labels] for item in items])
+        return labels_array.astype(dtype)
 
 
 class MultiLabelEntry(BaseMultiLabelEntry[LabeledEntry]):

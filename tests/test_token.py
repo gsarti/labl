@@ -1,4 +1,4 @@
-from wqe.utils.token import LabeledToken, LabeledTokenList
+from labl.utils.token import LabeledToken, LabeledTokenList
 
 
 def test_labeled_token_init():

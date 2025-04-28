@@ -9,9 +9,9 @@ from jiwer import AbstractTransform, Compose, ReduceToListOfListOfWords, Strip
 from transformers.tokenization_utils import BatchEncoding, PreTrainedTokenizer
 from transformers.tokenization_utils_fast import PreTrainedTokenizerFast
 
-from wqe.utils.aggregation import label_sum_aggregation
-from wqe.utils.token import LabelType
-from wqe.utils.transform import SPLIT_REGEX, ReduceToListOfListOfTokens, RegexReduceToListOfListOfWords
+from labl.utils.aggregation import label_sum_aggregation
+from labl.utils.token import LabelType
+from labl.utils.transform import SPLIT_REGEX, ReduceToListOfListOfTokens, RegexReduceToListOfListOfWords
 
 
 class Tokenizer(ABC):
@@ -139,6 +139,7 @@ class Tokenizer(ABC):
         all_labels: Sequence[Sequence[LabelType]],
         merge_fn: Callable[[Sequence[LabelType]], LabelType] | None = None,
         has_bos_token: bool = False,
+        keep_final_gap: bool = True,
     ) -> Sequence[Sequence[LabelType]]:
         """Merges gap annotations in a list of token_labels.
 
@@ -147,6 +148,9 @@ class Tokenizer(ABC):
                 merged.
             merge_fn (callable): A callable taking in a sequence of labels (`str | int | float | None`) and returning a
                 merged label of type `str | int | float | None`. Default: `None` (add labels together).
+            has_bos_token (bool): Whether the token sequence has a beginning-of-sequence token. Default: False.
+            keep_final_gap (bool): Whether to keep the final gap token. Default: True.
+
         Returns:
             A list of tokens with N + 1 tokens, as opposed to 2N + 1 tokens with gaps (assuming no given bos/eos,
             only the last gap is kept to handle end-of-sequence insertions).
@@ -160,7 +164,7 @@ class Tokenizer(ABC):
             for idx in range(len(labels)):
                 if idx % 2 == 0:  # Even indices are gaps
                     # Final gap is kept regardless of it being an EOS token or not
-                    if (has_bos_token and idx == 0) or idx == len(labels) - 1:
+                    if (has_bos_token and idx == 0) or (idx == len(labels) - 1 and keep_final_gap):
                         merged_labels.append(labels[idx])
                     else:
                         gap_label = labels[idx]
@@ -180,13 +184,14 @@ class Tokenizer(ABC):
     def _remove_gap_tokens(
         all_tokens: list[list[str]],
         has_bos_token: bool,
+        keep_final_gap: bool = True,
     ) -> list[list[str]]:
         """Removes gap tokens from a list of tokens.
 
         Args:
             all_tokens (list[list[str]]): The list of tokens to filter.
             has_bos_token (bool): Whether the token sequence has a beginning-of-sequence token.
-            has_eos_token (bool): Whether the token sequence has an end-of-sequence token.
+            keep_final_gap (bool): Whether to keep the final gap token. Default: True.
 
         Returns:
             A list of tokens with gaps removed. The final gap token is kept regardless of it being an EOS token
@@ -196,11 +201,10 @@ class Tokenizer(ABC):
         for tokens in all_tokens:
             curr_out_tokens = []
             for idx in range(len(tokens)):
-                if idx % 2 == 0:  # Even indices are gaps
-                    # Final gap is kept regardless of it being an EOS token or not
-                    if (has_bos_token and idx == 0) or idx == len(tokens) - 1:
-                        curr_out_tokens.append(tokens[idx])
-                else:
+                if idx % 2 != 0:  # Even indices are gaps
+                    curr_out_tokens.append(tokens[idx])
+                    continue
+                if (has_bos_token and idx == 0) or (keep_final_gap and idx == len(tokens) - 1):
                     curr_out_tokens.append(tokens[idx])
             out_tokens.append(curr_out_tokens)
         return out_tokens
@@ -209,11 +213,14 @@ class Tokenizer(ABC):
     def _remove_gap_offsets(
         all_offsets: list[list[tuple[int, int] | None]],
         has_bos_token: bool,
+        keep_final_gap: bool = True,
     ) -> list[list[tuple[int, int] | None]]:
         """Removes gap offsets from a list of offsets.
         Args:
             all_offsets (list[list[tuple[int, int] | None]]): The list of offsets to filter.
             has_bos_token (bool): Whether the token sequence has a beginning-of-sequence token.
+            keep_final_gap (bool): Whether to keep the final gap offset. Default: True.
+
         Returns:
             A list of offsets with gaps removed. The final gap offset is kept regardless of it being an EOS token
             to handle end-of-sequence insertions.
@@ -222,7 +229,7 @@ class Tokenizer(ABC):
             [
                 off
                 for idx, off in enumerate(offsets)
-                if off is not None or idx == len(offsets) - 1 or (idx == 0 and has_bos_token)
+                if off is not None or (idx == len(offsets) - 1 and keep_final_gap) or (idx == 0 and has_bos_token)
             ]
             for offsets in all_offsets
         ]
@@ -494,7 +501,7 @@ def get_tokenizer(
     if isinstance(tokenizer, AbstractTransform | Compose):
         raise RuntimeError(
             "Jiwer transform are supported by defining classes specifying an additional decoding method."
-            "See wqe.data.tokenizer.WhitespaceTokenizer or wqe.data.tokenizer.WordBoundaryTokenizer for examples."
+            "See labl.utils.tokenizer.WhitespaceTokenizer or labl.utils.tokenizer.WordBoundaryTokenizer for examples."
         )
     raise RuntimeError(
         "Invalid tokenizer type. Expected str, Tokenizer or transformers.PreTrainedTokenizer, "

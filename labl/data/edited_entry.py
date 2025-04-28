@@ -8,12 +8,12 @@ from jiwer import WordOutput
 from jiwer.alignment import _construct_comparison_string
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
 
-from wqe.data.base_entry import BaseLabeledEntry
-from wqe.data.base_sequence import BaseMultiLabelEntry
-from wqe.data.labeled_entry import LabeledEntry
-from wqe.utils.jiwer_ext import process_words
-from wqe.utils.tokenizer import Tokenizer, WhitespaceTokenizer, get_tokenizer
-from wqe.utils.typing import LabelType
+from labl.data.base_entry import BaseLabeledEntry
+from labl.data.base_sequence import BaseMultiLabelEntry
+from labl.data.labeled_entry import LabeledEntry
+from labl.utils.jiwer_ext import process_words
+from labl.utils.tokenizer import Tokenizer, WhitespaceTokenizer, get_tokenizer
+from labl.utils.typing import LabelType
 
 logger = getLogger(__name__)
 
@@ -160,6 +160,7 @@ class EditedEntry(BaseLabeledEntry):
         tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
         tokenizer_kwargs: dict = {},
         with_gaps: bool = True,
+        keep_final_gap: bool = True,
         sub_label: str = "S",
         ins_label: str = "I",
         del_label: str = "D",
@@ -177,6 +178,7 @@ class EditedEntry(BaseLabeledEntry):
             with_gaps (bool): Whether to add gaps to the tokens and offsets. Gaps are used to mark the positions of
                 insertions and deletions in the original/edited texts, respectively. If false, those are merged to the
                 next token to the right. Default: True.
+            keep_final_gap (bool): Whether to keep the final gap token. Default: True.
             sub_label (str): The label for substitutions. Default: "S".
             ins_label (str): The label for insertions. Default: "I".
             del_label (str): The label for deletions. Default: "D".
@@ -188,7 +190,7 @@ class EditedEntry(BaseLabeledEntry):
 
         Example:
             ```python
-            from wqe.data.edited_entry import EditedEntry
+            from labl.data.edited_entry import EditedEntry
 
             entries = EditedEntry.from_edits(
                 text="a simple example",
@@ -247,17 +249,24 @@ class EditedEntry(BaseLabeledEntry):
                 out_edit_tokens = e_tokens_with_gaps
                 out_edit_offsets = e_offsets_with_gaps
             else:
+                # If an ad-hoc EOS is added, it is always kept
+                if tokenizer.has_eos_token:
+                    if not keep_final_gap:
+                        raise RuntimeError(
+                            "The tokenizer has an EOS token, but `keep_final_gap` is set to False."
+                            "The EOS token will be kept."
+                        )
                 tokens_labels = tokenizer._merge_gap_annotations(
-                    [tokens_labels], has_bos_token=tokenizer.has_bos_token
+                    [tokens_labels], has_bos_token=tokenizer.has_bos_token, keep_final_gap=keep_final_gap
                 )[0]
                 e_tokens_labels = tokenizer._merge_gap_annotations(
-                    [e_tokens_labels], has_bos_token=tokenizer.has_bos_token
+                    [e_tokens_labels], has_bos_token=tokenizer.has_bos_token, keep_final_gap=keep_final_gap
                 )[0]
 
                 # If gaps are merged, the last gap is kept regardless of it being a gap or not to mark end-insertions.
                 # If the tokenizer did not have an EOS token for that, the sequence will have an extra token and offsets
                 # will need to be adjusted.
-                if tokenizer.has_eos_token:
+                if not keep_final_gap:
                     out_tokens, out_offsets = tokens, offsets
                     out_edit_tokens, out_edit_offsets = e_tokens, e_offsets
                 else:
@@ -381,7 +390,11 @@ class EditedEntry(BaseLabeledEntry):
     def get_labels(self) -> Sequence[LabelType]:
         return self.orig.tokens_labels
 
-    def merge_gap_annotations(self, merge_fn: Callable[[Sequence[LabelType]], LabelType] | None = None) -> None:
+    def merge_gap_annotations(
+        self,
+        merge_fn: Callable[[Sequence[LabelType]], LabelType] | None = None,
+        keep_final_gap: bool = True,
+    ) -> None:
         """Merge gap annotations in the tokens of `orig` and `edit`.
 
         This method is equivalent to calling `EditedEntry.from_edits` with `with_gaps=False`. Gap annotations are merged
@@ -394,15 +407,21 @@ class EditedEntry(BaseLabeledEntry):
         if not self._has_gaps:
             raise RuntimeError("Gaps for the current entry were already merged.")
         has_bos = self._has_bos_token
+        if self.has_eos_token:
+            if not keep_final_gap:
+                raise RuntimeError(
+                    "The tokenizer has an EOS token, but `keep_final_gap` is set to False. The EOS token will be kept."
+                )
         o_tok, o_lab, o_off = self._orig._tokens, self._orig._tokens_labels, self._orig._tokens_offsets
         e_tok, e_lab, e_off = self._edit._tokens, self._edit._tokens_labels, self._edit._tokens_offsets
-        self._orig._tokens = Tokenizer._remove_gap_tokens([o_tok], self._has_bos_token)[0]
-        self._edit._tokens = Tokenizer._remove_gap_tokens([e_tok], self._has_bos_token)[0]
-        self._orig._tokens_labels = Tokenizer._merge_gap_annotations([o_lab], merge_fn, has_bos)[0]
-        self._edit._tokens_labels = Tokenizer._merge_gap_annotations([e_lab], merge_fn, has_bos)[0]
-        self._orig._tokens_offsets = Tokenizer._remove_gap_offsets([o_off], self._has_bos_token)[0]
-        self._edit._tokens_offsets = Tokenizer._remove_gap_offsets([e_off], self._has_bos_token)[0]
+        self._orig._tokens = Tokenizer._remove_gap_tokens([o_tok], self._has_bos_token, keep_final_gap)[0]
+        self._edit._tokens = Tokenizer._remove_gap_tokens([e_tok], self._has_bos_token, keep_final_gap)[0]
+        self._orig._tokens_labels = Tokenizer._merge_gap_annotations([o_lab], merge_fn, has_bos, keep_final_gap)[0]
+        self._edit._tokens_labels = Tokenizer._merge_gap_annotations([e_lab], merge_fn, has_bos, keep_final_gap)[0]
+        self._orig._tokens_offsets = Tokenizer._remove_gap_offsets([o_off], self._has_bos_token, keep_final_gap)[0]
+        self._edit._tokens_offsets = Tokenizer._remove_gap_offsets([e_off], self._has_bos_token, keep_final_gap)[0]
         self._has_gaps = False
+        self._has_eos_token = keep_final_gap
 
     ### Helper Functions ###
 
@@ -467,29 +486,21 @@ class EditedEntry(BaseLabeledEntry):
     def _get_labels_array(
         self,
         items: "Sequence[EditedEntry]",
+        dtype: type | None = None,
     ) -> npt.NDArray[np.str_ | np.integer | np.floating]:
         all_labels = []
         for item in items:
             item_labels = []
+            num_tokens = len(item.orig.tokens_labels)
             for idx, label in enumerate(item.orig.tokens_labels):
-                if self.has_gaps and idx % 2 == 0:
-                    # Gaps are kept to None (ignored in agreement computation)
-                    item_labels.append(label)
-                elif idx == 0 and item.has_bos_token or idx == len(item.orig.tokens_labels) - 1 and item.has_eos_token:
+                if (idx == 0 and item.has_bos_token) or (idx == num_tokens - 1 and item.has_eos_token):
                     # BOS/EOS tokens are not labeled
                     item_labels.append(None)
                 else:
-                    # K = Keep is used to mark tokens that are not edited
-                    item_labels.append(label if label is not None else "K")
+                    item_labels.append(label if label is not None else np.nan)
             all_labels.append(item_labels)
         labels_array = np.array(all_labels)
-        try:
-            return np.where(labels_array == None, np.nan, labels_array)  # noqa: E711
-        except Exception as e:
-            print(labels_array)
-            raise RuntimeError(
-                "Unable to convert labels to numpy array. Please check the labels and try again."
-            ) from e
+        return labels_array.astype(dtype)
 
 
 class MultiEditEntry(BaseMultiLabelEntry[EditedEntry]):
@@ -511,7 +522,11 @@ class MultiEditEntry(BaseMultiLabelEntry[EditedEntry]):
 
     ### Utility Methods ###
 
-    def merge_gap_annotations(self, merge_fn: Callable[[Sequence[LabelType]], LabelType] | None = None) -> None:
+    def merge_gap_annotations(
+        self,
+        merge_fn: Callable[[Sequence[LabelType]], LabelType] | None = None,
+        keep_final_gap: bool = True,
+    ) -> None:
         """Merge gap annotations in the tokens of `orig` and `edit`.
 
         This method is equivalent to calling `EditedEntry.from_edits` with `with_gaps=False`. Gap annotations are merged
@@ -522,4 +537,4 @@ class MultiEditEntry(BaseMultiLabelEntry[EditedEntry]):
              `  I     S   I               I`         `   IS     I     I`
         """
         for entry in self:
-            entry.merge_gap_annotations(merge_fn=merge_fn)
+            entry.merge_gap_annotations(merge_fn=merge_fn, keep_final_gap=keep_final_gap)

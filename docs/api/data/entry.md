@@ -1,4 +1,4 @@
-::: wqe.data.base_entry.BaseLabeledEntry
+::: labl.data.base_entry.BaseLabeledEntry
     handler: python
     options:
       show_root_heading: true
@@ -7,7 +7,7 @@
         - relabel
         - get_agreement
 
-::: wqe.data.labeled_entry.LabeledEntry
+::: labl.data.labeled_entry.LabeledEntry
     handler: python
     options:
       show_root_heading: true
@@ -30,7 +30,7 @@
         - get_tokens
         - get_labels
 
-::: wqe.data.edited_entry.EditedEntry
+::: labl.data.edited_entry.EditedEntry
     handler: python
     options:
       show_root_heading: true

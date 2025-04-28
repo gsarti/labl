@@ -1,10 +1,10 @@
-::: wqe.utils.agreement.AgreementOutput
+::: labl.utils.agreement.AgreementOutput
     handler: python
     options:
       show_root_heading: true
       show_source: true
 
-::: wqe.utils.agreement.get_labels_agreement
+::: labl.utils.agreement.get_labels_agreement
     handler: python
     options:
       show_root_heading: true

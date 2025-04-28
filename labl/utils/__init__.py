@@ -1,4 +1,4 @@
-from wqe.utils.tokenizer import HuggingfaceTokenizer, WhitespaceTokenizer, WordBoundaryTokenizer
+from labl.utils.tokenizer import HuggingfaceTokenizer, WhitespaceTokenizer, WordBoundaryTokenizer
 
 __all__ = [
     "WhitespaceTokenizer",

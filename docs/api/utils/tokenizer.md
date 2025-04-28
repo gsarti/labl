@@ -1,4 +1,4 @@
-::: wqe.utils.tokenizer.Tokenizer
+::: labl.utils.tokenizer.Tokenizer
     handler: python
     options:
       show_root_heading: true
@@ -9,7 +9,7 @@
       - detokenize
       - tokenize_with_offsets
 
-::: wqe.utils.tokenizer.WhitespaceTokenizer
+::: labl.utils.tokenizer.WhitespaceTokenizer
     handler: python
     options:
       show_root_heading: true
@@ -18,7 +18,7 @@
       - detokenize
       - tokenize_with_offsets
 
-::: wqe.utils.tokenizer.WordBoundaryTokenizer
+::: labl.utils.tokenizer.WordBoundaryTokenizer
     handler: python
     options:
       show_root_heading: true
@@ -27,7 +27,7 @@
       - detokenize
       - tokenize_with_offsets
 
-::: wqe.utils.tokenizer.HuggingfaceTokenizer
+::: labl.utils.tokenizer.HuggingfaceTokenizer
     handler: python
     options:
       show_root_heading: true

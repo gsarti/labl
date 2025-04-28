@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import TypeVar
 
-from wqe.utils.typing import LabelType
+from labl.utils.typing import LabelType
 
 LabeledObject = TypeVar("LabeledObject", bound="LabeledInterface")
 

@@ -21,9 +21,9 @@ huggingface-hub==0.30.1
 idna==3.10
     # via requests
 jiwer==3.1.0
-    # via wqe (pyproject.toml)
+    # via labl (pyproject.toml)
 krippendorff==0.8.1
-    # via wqe (pyproject.toml)
+    # via labl (pyproject.toml)
 markdown-it-py==3.0.0
     # via rich
 mdurl==0.1.2
@@ -63,9 +63,9 @@ tqdm==4.67.1
     #   huggingface-hub
     #   transformers
 transformers==4.50.3
-    # via wqe (pyproject.toml)
+    # via labl (pyproject.toml)
 typer==0.15.2
-    # via wqe (pyproject.toml)
+    # via labl (pyproject.toml)
 typing-extensions==4.13.1
     # via
     #   huggingface-hub
