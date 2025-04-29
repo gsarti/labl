@@ -1,13 +1,14 @@
 from collections.abc import Sequence
 
 from tqdm import tqdm
-from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
+from transformers.tokenization_utils import PreTrainedTokenizer
+from transformers.tokenization_utils_fast import PreTrainedTokenizerFast
 
 from labl.data.base_sequence import BaseLabeledDataset
 from labl.data.labeled_entry import LabeledEntry
 from labl.utils.span import Span
-from labl.utils.token import LabelType
 from labl.utils.tokenizer import Tokenizer, get_tokenizer
+from labl.utils.typing import LabelType, SpanType
 
 
 class LabeledDataset(BaseLabeledDataset[LabeledEntry]):
@@ -23,7 +24,7 @@ class LabeledDataset(BaseLabeledDataset[LabeledEntry]):
     def from_spans(
         cls,
         texts: list[str],
-        spans: list[list[Span]] | list[list[dict[str, LabelType]]],
+        spans: list[list[Span]] | list[list[SpanType]],
         tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
         tokenizer_kwargs: dict = {},
     ) -> "LabeledDataset":

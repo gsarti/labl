@@ -6,13 +6,15 @@ from warnings import warn
 
 import numpy as np
 import numpy.typing as npt
-from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
+from transformers.tokenization_utils import PreTrainedTokenizer
+from transformers.tokenization_utils_fast import PreTrainedTokenizerFast
 
 from labl.data.base_entry import BaseLabeledEntry
 from labl.data.base_sequence import BaseMultiLabelEntry
 from labl.utils.span import Span, SpanList
-from labl.utils.token import LabeledToken, LabeledTokenList, LabelType
+from labl.utils.token import LabeledToken, LabeledTokenList
 from labl.utils.tokenizer import Tokenizer, WhitespaceTokenizer, get_tokenizer
+from labl.utils.typing import LabeledEntryDictType, LabelType, OffsetType, SpanType
 
 logger = getLogger(__name__)
 
@@ -54,7 +56,7 @@ class LabeledEntry(BaseLabeledEntry):
         tagged: str,
         tokens: list[str],
         tokens_labels: Sequence[LabelType],
-        tokens_offsets: list[tuple[int, int] | None],
+        tokens_offsets: list[OffsetType],
         constructor_key: object | None = None,
     ):
         """Private constructor for `LabeledEntry`.
@@ -148,12 +150,12 @@ class LabeledEntry(BaseLabeledEntry):
         raise RuntimeError("Cannot set token labels after initialization")
 
     @property
-    def tokens_offsets(self) -> list[tuple[int, int] | None]:
+    def tokens_offsets(self) -> list[OffsetType]:
         """The offsets for each token in the text. This is a read-only property."""
         return self._tokens_offsets
 
     @tokens_offsets.setter
-    def tokens_offsets(self, t: list[tuple[int, int] | None]):
+    def tokens_offsets(self, t: list[OffsetType]):
         raise RuntimeError("Cannot set the tokenized text offsets after initialization")
 
     @property
@@ -171,7 +173,7 @@ class LabeledEntry(BaseLabeledEntry):
     def from_spans(
         cls,
         text: str,
-        spans: list[Span] | list[dict[str, LabelType]],
+        spans: list[Span] | list[SpanType],
         tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
         tokenizer_kwargs: dict = {},
     ) -> "LabeledEntry":
@@ -245,7 +247,7 @@ class LabeledEntry(BaseLabeledEntry):
         tokens: list[str],
         labels: Sequence[LabelType],
         text: str | None = None,
-        offsets: list[tuple[int, int] | None] | None = None,
+        offsets: list[OffsetType] | None = None,
         keep_labels: list[str] = [],
         ignore_labels: list[str] = [],
         tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
@@ -350,7 +352,7 @@ class LabeledEntry(BaseLabeledEntry):
         text: str,
         spans: list[Span],
         tokenizer: Tokenizer | None = None,
-    ) -> tuple[list[str], Sequence[LabelType], list[tuple[int, int] | None]]:
+    ) -> tuple[list[str], Sequence[LabelType], list[OffsetType]]:
         """Extracts tokens, labels and offsets from a text and a set of labeled spans.
 
         Args:
@@ -497,7 +499,7 @@ class LabeledEntry(BaseLabeledEntry):
     def get_spans_from_tokens(
         text: str,
         labels: Sequence[LabelType],
-        offsets: list[tuple[int, int] | None] | None = None,
+        offsets: list[OffsetType] | None = None,
         tokenizer: Tokenizer | None = None,
         keep_labels: list[str] = [],
         ignore_labels: list[str] = [],
@@ -563,6 +565,48 @@ class LabeledEntry(BaseLabeledEntry):
 
     def get_labels(self) -> Sequence[LabelType]:
         return self.tokens_labels
+
+    def to_dict(self) -> LabeledEntryDictType:
+        """Convert the `LabeledEntry` to a dictionary representation.
+
+        Returns:
+            A dictionary representation of the `LabeledEntry`.
+        """
+        return LabeledEntryDictType(
+            {
+                "_class": self.__class__.__name__,
+                "text": self.text,
+                "tagged": self.tagged,
+                "tokens": self.tokens,
+                "tokens_labels": self.tokens_labels,
+                "tokens_offsets": self.tokens_offsets,
+                "spans": self.spans.to_dict(),
+            }
+        )
+
+    @classmethod
+    def from_dict(cls, data: LabeledEntryDictType) -> "LabeledEntry":
+        """Create a `LabeledEntry` from a dictionary representation.
+
+        Args:
+            data (dict): A dictionary representation of the `LabeledEntry` obtained with `to_dict()`.
+
+        Returns:
+            A `LabeledEntry` object.
+        """
+        if "_class" not in data:
+            raise RuntimeError("The provided dictionary is missing the required _class attribute.")
+        if data["_class"] != cls.__name__:
+            raise RuntimeError(f"Cannot load a {cls.__name__} object from {data['_class']}")
+        return cls(
+            text=data["text"],
+            spans=Span.from_list(data["spans"]),
+            tagged=data["tagged"],
+            tokens=data["tokens"],
+            tokens_labels=data["tokens_labels"],
+            tokens_offsets=data["tokens_offsets"],
+            constructor_key=cls.__constructor_key,
+        )
 
     ### Helper Functions ###
 

@@ -6,11 +6,13 @@ import numpy as np
 import numpy.typing as npt
 from krippendorff.krippendorff import LevelOfMeasurement
 
+import labl
+import labl.data
 from labl.data.base_entry import BaseLabeledEntry, EntryType
 from labl.data.labeled_interface import LabeledInterface, LabeledObject
 from labl.utils.agreement import AgreementOutput, get_labels_agreement
 from labl.utils.token import LabeledToken, LabeledTokenList
-from labl.utils.typing import LabelType
+from labl.utils.typing import EntrySequenceDictType, LabelType
 
 SequenceType = TypeVar("SequenceType", bound="BaseLabeledSequence")
 
@@ -30,6 +32,33 @@ class BaseLabeledSequence(LabeledInterface, list[LabeledObject], ABC):
 
     def __sub__(self: SequenceType, other: SequenceType) -> SequenceType:
         return self.__class__(entry for entry in self if entry not in other)
+
+    def to_dict(self) -> EntrySequenceDictType:
+        """Converts the sequence to a dictionary representation."""
+        return EntrySequenceDictType(
+            {
+                "_class": self.__class__.__name__,
+                "entries": [entry.to_dict() for entry in self],
+            }
+        )
+
+    @classmethod
+    def from_dict(cls, data: EntrySequenceDictType) -> "BaseLabeledSequence":
+        """Creates a sequence from a dictionary representation."""
+        if "_class" not in data:
+            raise RuntimeError("The provided dictionary is missing the required _class attribute.")
+        if data["_class"] != cls.__name__:
+            raise RuntimeError(f"Cannot load a {cls.__name__} object from {data['_class']}")
+        entries_list = []
+        for entry_data in data["entries"]:
+            entry_cls = getattr(labl.data, entry_data["_class"], None)
+            if entry_cls is None or not issubclass(entry_cls, LabeledInterface):
+                raise RuntimeError(
+                    "The _class attribute must correspond to a `LabeledInterface` class for loading."
+                    f"Found: {entry_data['_class']}"
+                )
+            entries_list.append(entry_cls.from_dict(entry_data))
+        return cls(entries_list)
 
     ### Utility Functions ###
 

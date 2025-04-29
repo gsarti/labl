@@ -6,14 +6,15 @@ import numpy as np
 import numpy.typing as npt
 from jiwer import WordOutput
 from jiwer.alignment import _construct_comparison_string
-from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
+from transformers.tokenization_utils import PreTrainedTokenizer
+from transformers.tokenization_utils_fast import PreTrainedTokenizerFast
 
 from labl.data.base_entry import BaseLabeledEntry
 from labl.data.base_sequence import BaseMultiLabelEntry
 from labl.data.labeled_entry import LabeledEntry
 from labl.utils.jiwer_ext import process_words
 from labl.utils.tokenizer import Tokenizer, WhitespaceTokenizer, get_tokenizer
-from labl.utils.typing import LabelType
+from labl.utils.typing import EditedEntryDictType, LabelType, OffsetType
 
 logger = getLogger(__name__)
 
@@ -25,7 +26,7 @@ class EditedEntry(BaseLabeledEntry):
     Attributes:
         orig (LabeledEntry): The original entry.
         edit (LabeledEntry): The edited entry.
-        aligned (WordOutput): A `jiwer.WordOutput` with aligned tokens for `orig` and `edit`, using tokenized the
+        aligned (WordOutput | None): A `jiwer.WordOutput` with aligned tokens for `orig` and `edit`, using tokenized the
             provided tokenizer.
         has_gaps (bool): Whether the token sequence has gaps. Gaps are used for text/edit pairs to mark the
             positions of insertions and deletions in the original/edited texts, respectively. If `False`, it means gap
@@ -39,10 +40,10 @@ class EditedEntry(BaseLabeledEntry):
         self,
         orig: LabeledEntry,
         edit: LabeledEntry,
-        aligned: WordOutput,
         has_gaps: bool,
         has_bos_token: bool,
         has_eos_token: bool,
+        aligned: WordOutput | None = None,
         constructor_key: object | None = None,
     ):
         """Private constructor for `EditedEntry`.
@@ -94,12 +95,12 @@ class EditedEntry(BaseLabeledEntry):
         raise RuntimeError("Cannot set edited entry.")
 
     @property
-    def aligned(self) -> WordOutput:
+    def aligned(self) -> WordOutput | None:
         """Aligned output using `jiwer` for `orig` and `edit`."""
         return self._aligned
 
     @aligned.setter
-    def aligned(self, t: WordOutput):
+    def aligned(self, t: WordOutput | None):
         raise RuntimeError("Cannot set aligned tokens.")
 
     @property
@@ -132,6 +133,8 @@ class EditedEntry(BaseLabeledEntry):
     @property
     def aligned_str(self) -> str:
         """Aligned string at the token level with [`jiwer.visualize_alignment`](https://jitsi.github.io/jiwer/reference/alignment/#alignment.visualize_alignment)."""
+        if self._aligned is None:
+            return "None"
         aligned_str_out = ""
         aligned_str = _construct_comparison_string(
             self._aligned.references[0],
@@ -307,9 +310,9 @@ class EditedEntry(BaseLabeledEntry):
         text: str,
         edit: str,
         tokens: list[str] | None = None,
-        tokens_offsets: list[tuple[int, int] | None] | None = None,
+        tokens_offsets: list[OffsetType] | None = None,
         edit_tokens: list[str] | None = None,
-        edit_tokens_offsets: list[tuple[int, int] | None] | None = None,
+        edit_tokens_offsets: list[OffsetType] | None = None,
         aligned: WordOutput | None = None,
         tokenizer: Tokenizer | None = None,
         sub_label: str = "S",
@@ -390,6 +393,46 @@ class EditedEntry(BaseLabeledEntry):
     def get_labels(self) -> Sequence[LabelType]:
         return self.orig.tokens_labels
 
+    def to_dict(self) -> EditedEntryDictType:
+        """Convert the `EditedEntry` to a dictionary representation.
+
+        Returns:
+            A dictionary representation of the `EditedEntry`.
+        """
+        return EditedEntryDictType(
+            {
+                "_class": self.__class__.__name__,
+                "orig": self.orig.to_dict(),
+                "edit": self.edit.to_dict(),
+                "has_bos_token": self.has_bos_token,
+                "has_eos_token": self.has_eos_token,
+                "has_gaps": self.has_gaps,
+            }
+        )
+
+    @classmethod
+    def from_dict(cls, data: EditedEntryDictType) -> "EditedEntry":
+        """Create a `EditedEntry` from a dictionary representation.
+
+        Args:
+            data (dict): A dictionary representation of the `EditedEntry` obtained with `to_dict()`.
+
+        Returns:
+            A `EditedEntry` object.
+        """
+        if "_class" not in data:
+            raise RuntimeError("The provided dictionary is missing the required _class attribute.")
+        if data["_class"] != cls.__name__:
+            raise RuntimeError(f"Cannot load a {cls.__name__} object from {data['_class']}")
+        return cls(
+            orig=LabeledEntry.from_dict(data["orig"]),
+            edit=LabeledEntry.from_dict(data["edit"]),
+            has_bos_token=data["has_bos_token"],
+            has_eos_token=data["has_eos_token"],
+            has_gaps=data["has_gaps"],
+            constructor_key=cls.__constructor_key,
+        )
+
     def merge_gap_annotations(
         self,
         merge_fn: Callable[[Sequence[LabelType]], LabelType] | None = None,
@@ -461,7 +504,7 @@ class EditedEntry(BaseLabeledEntry):
 
     @staticmethod
     def _get_tokens_with_gaps(
-        t: Tokenizer, text: str, toks: list[str] | None, offs: list[tuple[int, int] | None] | None, gap_token: str
+        t: Tokenizer, text: str, toks: list[str] | None, offs: list[OffsetType] | None, gap_token: str
     ):
         if toks is None or offs is None:
             all_toks, all_offs = t.tokenize_with_offsets(text, add_gaps=True, gap_token=gap_token)

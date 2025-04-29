@@ -2,8 +2,9 @@ from collections.abc import Callable, Sequence
 from typing import Any, cast
 
 from tqdm import tqdm
-from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
-from transformers.utils import is_pandas_available
+from transformers.tokenization_utils import PreTrainedTokenizer
+from transformers.tokenization_utils_fast import PreTrainedTokenizerFast
+from transformers.utils.import_utils import is_pandas_available
 
 from labl.data.base_sequence import BaseLabeledDataset
 from labl.data.edited_entry import EditedEntry, MultiEditEntry

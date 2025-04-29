@@ -29,6 +29,8 @@
         - get_spans_from_tokens
         - get_tokens
         - get_labels
+        - to_dict
+        - from_dict
 
 ::: labl.data.edited_entry.EditedEntry
     handler: python
@@ -47,4 +49,6 @@
         - get_tokens_labels_from_edit
         - get_tokens
         - get_labels
+        - to_dict
+        - from_dict
         - merge_gap_annotations

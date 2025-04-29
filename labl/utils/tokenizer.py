@@ -6,12 +6,13 @@ from collections.abc import Callable, Sequence
 from typing import cast
 
 from jiwer import AbstractTransform, Compose, ReduceToListOfListOfWords, Strip
-from transformers.tokenization_utils import BatchEncoding, PreTrainedTokenizer
+from transformers.tokenization_utils import PreTrainedTokenizer
+from transformers.tokenization_utils_base import BatchEncoding
 from transformers.tokenization_utils_fast import PreTrainedTokenizerFast
 
 from labl.utils.aggregation import label_sum_aggregation
-from labl.utils.token import LabelType
 from labl.utils.transform import SPLIT_REGEX, ReduceToListOfListOfTokens, RegexReduceToListOfListOfWords
+from labl.utils.typing import LabelType, OffsetType
 
 
 class Tokenizer(ABC):
@@ -37,7 +38,7 @@ class Tokenizer(ABC):
 
     def __call__(
         self, texts: str | list[str], with_offsets: bool = False
-    ) -> list[list[str]] | tuple[list[list[str]], Sequence[Sequence[tuple[int, int] | None]]]:
+    ) -> list[list[str]] | tuple[list[list[str]], Sequence[Sequence[OffsetType]]]:
         """Tokenizes one or more input strings.
 
         Args:
@@ -77,7 +78,7 @@ class Tokenizer(ABC):
     @abstractmethod
     def tokenize_with_offsets(
         self, texts: str | list[str], add_gaps: bool = False, gap_token: str = "▁"
-    ) -> tuple[list[list[str]], list[list[tuple[int, int] | None]]]:
+    ) -> tuple[list[list[str]], list[list[OffsetType]]]:
         """Tokenizes the input texts and returns the character spans of the tokens.
 
         Args:
@@ -94,9 +95,9 @@ class Tokenizer(ABC):
     def _add_gaps_to_tokens_and_offsets(
         self,
         tokens: list[list[str]],
-        offsets: list[list[tuple[int, int] | None]],
+        offsets: list[list[OffsetType]],
         gap_token: str = "▁",
-    ) -> tuple[list[list[str]], list[list[tuple[int, int] | None]]]:
+    ) -> tuple[list[list[str]], list[list[OffsetType]]]:
         """Adds gaps to one or more sequences of tokens and their offsets.
 
         This is useful for adding annotations of insertions and deletions to the text and edits, respectively.
@@ -211,10 +212,10 @@ class Tokenizer(ABC):
 
     @staticmethod
     def _remove_gap_offsets(
-        all_offsets: list[list[tuple[int, int] | None]],
+        all_offsets: list[list[OffsetType]],
         has_bos_token: bool,
         keep_final_gap: bool = True,
-    ) -> list[list[tuple[int, int] | None]]:
+    ) -> list[list[OffsetType]]:
         """Removes gap offsets from a list of offsets.
         Args:
             all_offsets (list[list[tuple[int, int] | None]]): The list of offsets to filter.
@@ -235,7 +236,7 @@ class Tokenizer(ABC):
         ]
 
     @staticmethod
-    def _has_gaps(tokens: list[str], offsets: list[tuple[int, int] | None], gap_token="▁"):
+    def _has_gaps(tokens: list[str], offsets: list[OffsetType], gap_token="▁"):
         """Checks if the tokens contain gaps.
 
         Args:
@@ -281,7 +282,7 @@ class WhitespaceTokenizer(Tokenizer):
             tokens = [tokens]
         return [tok_transform.word_delimiter.join(sentence) for sentence in tokens]
 
-    def _get_offsets(self, tokens: list[str] | list[list[str]]) -> list[list[tuple[int, int] | None]]:
+    def _get_offsets(self, tokens: list[str] | list[list[str]]) -> list[list[OffsetType]]:
         """Returns the character spans of the tokens in the original text.
 
         Args:
@@ -312,7 +313,7 @@ class WhitespaceTokenizer(Tokenizer):
 
     def tokenize_with_offsets(
         self, texts: str | list[str], add_gaps: bool = False, gap_token: str = "▁"
-    ) -> tuple[list[list[str]], list[list[tuple[int, int] | None]]]:
+    ) -> tuple[list[list[str]], list[list[OffsetType]]]:
         """Tokenizes the input texts and returns the character spans of the tokens.
 
         Args:
@@ -377,7 +378,7 @@ class WordBoundaryTokenizer(Tokenizer):
 
     def tokenize_with_offsets(
         self, texts: str | list[str], add_gaps: bool = False, gap_token: str = "▁"
-    ) -> tuple[list[list[str]], list[list[tuple[int, int] | None]]]:
+    ) -> tuple[list[list[str]], list[list[OffsetType]]]:
         """Tokenizes the input texts and returns the character spans of the tokens.
 
         Args:
@@ -394,7 +395,7 @@ class WordBoundaryTokenizer(Tokenizer):
         if isinstance(texts, str):
             texts = [texts]
         tokens: list[list[str]] = self.transform(texts)
-        all_offsets: list[list[tuple[int, int] | None]] = []
+        all_offsets: list[list[OffsetType]] = []
         for text in texts:
             text_offsets = []
             for match in re.finditer(expression, text):
@@ -455,7 +456,7 @@ class HuggingfaceTokenizer(Tokenizer):
 
     def tokenize_with_offsets(
         self, texts: str | list[str], add_gaps: bool = False, gap_token: str = "▁"
-    ) -> tuple[list[list[str]], list[list[tuple[int, int] | None]]]:
+    ) -> tuple[list[list[str]], list[list[OffsetType]]]:
         """Tokenizes the input texts and returns the character spans of the tokens.
 
         Args:
@@ -477,7 +478,7 @@ class HuggingfaceTokenizer(Tokenizer):
             encoding: BatchEncoding = self.transform.tokenizer(text_target=sentence, return_offsets_mapping=True)
             tokens = encoding.tokens()
             offsets = [tup if tup[0] != 0 or tup[1] != 0 else None for tup in encoding.offset_mapping]
-            offsets = cast(list[tuple[int, int] | None], offsets)
+            offsets = cast(list[OffsetType], offsets)
             assert len(tokens) == len(offsets), "Token and char span lengths do not match."
             all_tokens.append(tokens)
             all_offsets.append(offsets)

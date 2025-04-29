@@ -2,9 +2,10 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import TypeVar
 
-from labl.utils.typing import LabelType
+from labl.utils.typing import LabelType, SerializableDictType
 
 LabeledObject = TypeVar("LabeledObject", bound="LabeledInterface")
+SerializedLabeledObject = TypeVar("SerializedLabeledObject", bound="SerializableDictType")
 
 
 class LabeledInterface(ABC):
@@ -29,6 +30,16 @@ class LabeledInterface(ABC):
         relabel_fn: Callable[[LabelType], LabelType] | None = None,
         relabel_map: dict[str | int, LabelType] | None = None,
     ) -> None:
+        pass
+
+    @abstractmethod
+    def to_dict(self) -> SerializableDictType:
+        pass
+
+    @classmethod
+    @abstractmethod
+    def from_dict(cls, data: SerializedLabeledObject) -> "LabeledInterface":  # type: ignore
+        """Creates an instance of the class from a dictionary representation."""
         pass
 
     ### Helper Functions ###

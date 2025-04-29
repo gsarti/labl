@@ -76,3 +76,5 @@
       members:
       - label_types
       - relabel
+      - to_dict
+      - from_dict

@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 
-from labl.utils.typing import LabelType
+from labl.utils.typing import LabelType, SpanType
 
 
 @dataclass
@@ -24,7 +24,7 @@ class Span:
         """Returns a string representation of the span."""
         return f"{self.start}:{self.end} ({self.text}) => {self.label}"
 
-    def to_dict(self) -> dict[str, LabelType]:
+    def to_dict(self) -> SpanType:
         return asdict(self)
 
     @classmethod
@@ -57,3 +57,6 @@ class SpanList(list[Span]):
 
     def __str__(self):
         return "\n".join(f"{idx}: {span}" for idx, span in enumerate(self))
+
+    def to_dict(self) -> list[SpanType]:
+        return [span.to_dict() for span in self]
