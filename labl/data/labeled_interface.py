@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import TypeVar
 
-from labl.utils.typing import LabelType, SerializableDictType
+from labl.utils.typing import InfoDictType, LabelType, SerializableDictType
 
 LabeledObject = TypeVar("LabeledObject", bound="LabeledInterface")
 SerializedLabeledObject = TypeVar("SerializedLabeledObject", bound="SerializableDictType")
@@ -10,8 +10,18 @@ SerializedLabeledObject = TypeVar("SerializedLabeledObject", bound="Serializable
 
 class LabeledInterface(ABC):
     _label_types: list[type]
+    _info: InfoDictType
 
     ### Getters and Setters ###
+
+    @property
+    def info(self) -> InfoDictType:
+        """Returns the info dictionary for the entry. This is a read-only property."""
+        return self._info
+
+    @info.setter
+    def info(self, info: InfoDictType):
+        raise RuntimeError("Cannot set the attribute `info` after initialization")
 
     @property
     def label_types(self) -> list[type]:

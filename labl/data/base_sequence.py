@@ -12,7 +12,7 @@ from labl.data.base_entry import BaseLabeledEntry, EntryType
 from labl.data.labeled_interface import LabeledInterface, LabeledObject
 from labl.utils.agreement import AgreementOutput, get_labels_agreement
 from labl.utils.token import LabeledToken, LabeledTokenList
-from labl.utils.typing import EntrySequenceDictType, LabelType
+from labl.utils.typing import EntrySequenceDictType, InfoDictType, LabelType
 
 SequenceType = TypeVar("SequenceType", bound="BaseLabeledSequence")
 
@@ -23,12 +23,13 @@ class BaseLabeledSequence(LabeledInterface, list[LabeledObject], ABC):
     Supports basic list operations like indexing, length checking and iteration.
     """
 
-    def __init__(self, iterable: Iterable[LabeledObject] | None = None):
+    def __init__(self, iterable: Iterable[LabeledObject] | None = None, *, info: InfoDictType = {}):
         if iterable is None:
             super().__init__()
         else:
             super().__init__(iterable)
         self._label_types = self._get_label_types()
+        self._info = info
 
     def __sub__(self: SequenceType, other: SequenceType) -> SequenceType:
         return self.__class__(entry for entry in self if entry not in other)
@@ -38,6 +39,7 @@ class BaseLabeledSequence(LabeledInterface, list[LabeledObject], ABC):
         return EntrySequenceDictType(
             {
                 "_class": self.__class__.__name__,
+                "info": self.info,
                 "entries": [entry.to_dict() for entry in self],
             }
         )

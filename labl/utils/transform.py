@@ -5,7 +5,7 @@ from logging import getLogger
 from typing import cast
 
 from jiwer import ReduceToListOfListOfWords
-from transformers import AutoTokenizer
+from transformers.models.auto.tokenization_auto import AutoTokenizer
 from transformers.tokenization_utils import PreTrainedTokenizer
 from transformers.tokenization_utils_fast import PreTrainedTokenizerFast
 

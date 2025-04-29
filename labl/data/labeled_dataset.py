@@ -8,7 +8,7 @@ from labl.data.base_sequence import BaseLabeledDataset
 from labl.data.labeled_entry import LabeledEntry
 from labl.utils.span import Span
 from labl.utils.tokenizer import Tokenizer, get_tokenizer
-from labl.utils.typing import LabelType, SpanType
+from labl.utils.typing import InfoDictType, LabelType, SpanType
 
 
 class LabeledDataset(BaseLabeledDataset[LabeledEntry]):
@@ -25,6 +25,7 @@ class LabeledDataset(BaseLabeledDataset[LabeledEntry]):
         cls,
         texts: list[str],
         spans: list[list[Span]] | list[list[SpanType]],
+        infos: list[InfoDictType] | None = None,
         tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
         tokenizer_kwargs: dict = {},
     ) -> "LabeledDataset":
@@ -35,21 +36,30 @@ class LabeledDataset(BaseLabeledDataset[LabeledEntry]):
                 The set of text.
             spans (list[list[Span]] | list[list[dict[str, str | int | float | None]]]):
                 A list of spans for each text.
+            infos (list[dict[str, str | int | float | bool]] | None):
+                A list of dictionaries containing additional information for each entry.
+                If None, no additional information is added. Defaults to None.
             tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A `Tokenizer`
                 used for tokenization. Supports initialization from a `transformers.PreTrainedTokenizer`, and uses
                 whitespace tokenization by default.
             tokenizer_kwargs (dict): Additional arguments for the tokenizer.
         """
         tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
+        if infos is None:
+            infos = [{}] * len(texts)
         return cls(
             [
                 LabeledEntry.from_spans(
                     text,
                     span,
                     tokenizer=tokenizer,
+                    info=info,
                 )
-                for text, span in tqdm(
-                    zip(texts, spans, strict=True), desc="Creating labeled dataset", total=len(texts), unit="entries"
+                for text, span, info in tqdm(
+                    zip(texts, spans, infos, strict=True),
+                    desc="Creating labeled dataset",
+                    total=len(texts),
+                    unit="entries",
                 )
             ]
         )
@@ -62,6 +72,7 @@ class LabeledDataset(BaseLabeledDataset[LabeledEntry]):
         keep_tags: list[str] = [],
         ignore_tags: list[str] = [],
         tokenizer_kwargs: dict = {},
+        infos: list[InfoDictType] | None = None,
     ) -> "LabeledDataset":
         """Create a `LabeledDataset` from a set of tagged texts.
 
@@ -71,11 +82,16 @@ class LabeledDataset(BaseLabeledDataset[LabeledEntry]):
             tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A `Tokenizer`
                 used for tokenization. Supports initialization from a `transformers.PreTrainedTokenizer`, and uses
                 whitespace tokenization by default.
+            infos (list[dict[str, str | int | float | bool]] | None):
+                A list of dictionaries containing additional information for each entry.
+                If None, no additional information is added. Defaults to None.
             keep_tags (list[str]): A list of tags to keep.
             ignore_tags (list[str]): A list of tags to ignore.
             tokenizer_kwargs (dict): Additional arguments for the tokenizer.
         """
         tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
+        if infos is None:
+            infos = [{}] * len(tagged)
         return cls(
             [
                 LabeledEntry.from_tagged(
@@ -83,8 +99,11 @@ class LabeledDataset(BaseLabeledDataset[LabeledEntry]):
                     tokenizer=tokenizer,
                     keep_tags=keep_tags,
                     ignore_tags=ignore_tags,
+                    info=info,
                 )
-                for text in tqdm(tagged, desc="Creating labeled dataset", total=len(tagged), unit="entries")
+                for text, info in tqdm(
+                    zip(tagged, infos, strict=True), desc="Creating labeled dataset", total=len(tagged), unit="entries"
+                )
             ]
         )
 
@@ -93,6 +112,7 @@ class LabeledDataset(BaseLabeledDataset[LabeledEntry]):
         cls,
         tokens: list[list[str]],
         labels: Sequence[Sequence[LabelType]],
+        infos: list[InfoDictType] | None = None,
         keep_labels: list[str] = [],
         ignore_labels: list[str] = [],
         tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
@@ -105,6 +125,9 @@ class LabeledDataset(BaseLabeledDataset[LabeledEntry]):
                 A list of lists of string tokens.
             labels (list[list[str | int | float | None]] | None):
                 A list of lists of labels for the tokens.
+            infos (list[dict[str, str | int | float | bool]] | None):
+                A list of dictionaries containing additional information for each entry.
+                If None, no additional information is added. Defaults to None.
             keep_labels (list[str]): A list of labels to keep.
             ignore_labels (list[str]): A list of labels to ignore.
             tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A `Tokenizer`
@@ -113,6 +136,8 @@ class LabeledDataset(BaseLabeledDataset[LabeledEntry]):
             tokenizer_kwargs (dict): Additional arguments for the tokenizer.
         """
         tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
+        if infos is None:
+            infos = [{}] * len(tokens)
         return cls(
             [
                 LabeledEntry.from_tokens(
@@ -121,6 +146,7 @@ class LabeledDataset(BaseLabeledDataset[LabeledEntry]):
                     keep_labels=keep_labels,
                     ignore_labels=ignore_labels,
                     tokenizer=tokenizer,
+                    info=infos[idx],
                 )
                 for idx in tqdm(range(len(tokens)), desc="Creating LabeledDataset", total=len(tokens), unit="entries")
             ]

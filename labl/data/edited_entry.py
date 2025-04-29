@@ -14,7 +14,7 @@ from labl.data.base_sequence import BaseMultiLabelEntry
 from labl.data.labeled_entry import LabeledEntry
 from labl.utils.jiwer_ext import process_words
 from labl.utils.tokenizer import Tokenizer, WhitespaceTokenizer, get_tokenizer
-from labl.utils.typing import EditedEntryDictType, LabelType, OffsetType
+from labl.utils.typing import EditedEntryDictType, InfoDictType, LabelType, OffsetType
 
 logger = getLogger(__name__)
 
@@ -26,11 +26,14 @@ class EditedEntry(BaseLabeledEntry):
     Attributes:
         orig (LabeledEntry): The original entry.
         edit (LabeledEntry): The edited entry.
-        aligned (WordOutput | None): A `jiwer.WordOutput` with aligned tokens for `orig` and `edit`, using tokenized the
-            provided tokenizer.
         has_gaps (bool): Whether the token sequence has gaps. Gaps are used for text/edit pairs to mark the
             positions of insertions and deletions in the original/edited texts, respectively. If `False`, it means gap
             annotations were merged to the next token to the right.
+        has_bos_token (bool): Whether the tokenizer has a beginning-of-sequence token.
+        has_eos_token (bool): Whether the tokenizer has an end-of-sequence token.
+        aligned (WordOutput | None): A `jiwer.WordOutput` with aligned tokens for `orig` and `edit`, using tokenized the
+            provided tokenizer.
+        info (dict[str, str | int | float | bool]): A dictionary containing additional information about the entry.
     """
 
     # Private constructor key to prevent direct instantiation
@@ -44,6 +47,7 @@ class EditedEntry(BaseLabeledEntry):
         has_bos_token: bool,
         has_eos_token: bool,
         aligned: WordOutput | None = None,
+        info: InfoDictType = {},
         constructor_key: object | None = None,
     ):
         """Private constructor for `EditedEntry`.
@@ -66,6 +70,7 @@ class EditedEntry(BaseLabeledEntry):
         self._has_bos_token = has_bos_token
         self._has_eos_token = has_eos_token
         self._label_types = list(set(self._orig._label_types) | set(self._edit._label_types))
+        self._info = info
 
     def __str__(self) -> str:
         return dedent(f"""\
@@ -168,6 +173,7 @@ class EditedEntry(BaseLabeledEntry):
         ins_label: str = "I",
         del_label: str = "D",
         gap_token: str = "▁",
+        info: InfoDictType | list[InfoDictType] = {},
     ) -> "EditedEntry | MultiEditEntry":
         """Create a `EditedEntry` or an `MultiEditEntry` from a text and one or more edits.
 
@@ -186,6 +192,8 @@ class EditedEntry(BaseLabeledEntry):
             ins_label (str): The label for insertions. Default: "I".
             del_label (str): The label for deletions. Default: "D".
             gap_token (str): The token to use for gaps. Default: "▁".
+            info (dict[str, str | int | float | bool] | list[dict[str, str | int | float | bool]]):
+                A dictionary containing additional information about the entry.
 
         Returns:
             A single `EditedEntry` if `edits` is a single string, otherwise an `MultiEditEntry` with one entry per
@@ -210,8 +218,12 @@ class EditedEntry(BaseLabeledEntry):
                                    I   I                  I     I I    I     I        S
             ```
         """
-        tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
         edits = [edits] if isinstance(edits, str) else edits
+        if isinstance(info, list) and len(edits) != len(info):
+            raise RuntimeError(
+                f"The number of edits ({len(edits)}) does not match the number of info dictionaries ({len(info)})."
+            )
+        tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
         tokens, offsets = tokenizer.tokenize_with_offsets(text)
         tokens_with_gaps, offsets_with_gaps = tokenizer._add_gaps_to_tokens_and_offsets(tokens, offsets, gap_token)
         tokens, offsets = tokens[0], offsets[0]
@@ -220,13 +232,15 @@ class EditedEntry(BaseLabeledEntry):
         all_edits_tokens_with_gaps, all_edits_offsets_with_gaps = tokenizer._add_gaps_to_tokens_and_offsets(
             all_edits_tokens, all_edits_offsets, gap_token=gap_token
         )
-        entries = MultiEditEntry()
-        for edit, e_tokens, e_offsets, e_tokens_with_gaps, e_offsets_with_gaps in zip(
+        entries = MultiEditEntry(info=info if isinstance(info, dict) else {})
+        all_info_dicts = info if isinstance(info, list) else [info] * len(edits)
+        for edit, e_tokens, e_offsets, e_tokens_with_gaps, e_offsets_with_gaps, e_info in zip(
             edits,
             all_edits_tokens,
             all_edits_offsets,
             all_edits_tokens_with_gaps,
             all_edits_offsets_with_gaps,
+            all_info_dicts,
             strict=True,
         ):
             aligned = process_words(
@@ -294,6 +308,7 @@ class EditedEntry(BaseLabeledEntry):
                 has_gaps=with_gaps,
                 has_bos_token=tokenizer.has_bos_token,
                 has_eos_token=tokenizer.has_eos_token,
+                info=e_info,
                 constructor_key=cls.__constructor_key,
             )
             entries.append(entry)
@@ -402,6 +417,7 @@ class EditedEntry(BaseLabeledEntry):
         return EditedEntryDictType(
             {
                 "_class": self.__class__.__name__,
+                "info": self.info,
                 "orig": self.orig.to_dict(),
                 "edit": self.edit.to_dict(),
                 "has_bos_token": self.has_bos_token,
@@ -430,6 +446,7 @@ class EditedEntry(BaseLabeledEntry):
             has_bos_token=data["has_bos_token"],
             has_eos_token=data["has_eos_token"],
             has_gaps=data["has_gaps"],
+            info=data["info"],
             constructor_key=cls.__constructor_key,
         )
 
@@ -472,6 +489,8 @@ class EditedEntry(BaseLabeledEntry):
         orig_tokens_str = str(self._orig.labeled_tokens).replace("\n", "\n" + 8 * " ")
         edit_tokens_str = str(self._edit.labeled_tokens).replace("\n", "\n" + 8 * " ")
         aligned_str = self.aligned_str.replace("\n", "\n" + 8 * " ")
+        info_str = "\n".join([f"{k}: {v}" for k, v in self._info.items()])
+        info_str = info_str.replace("\n", "\n" + 8 * " ")
         out_str = f"""\
         edit.text:
         {indent(self._edit._text, 12 * " ")}
@@ -481,6 +500,8 @@ class EditedEntry(BaseLabeledEntry):
         {indent(edit_tokens_str, 12 * " ")}
         aligned:
         {indent(aligned_str, 12 * " ")}
+        info:
+        {indent(info_str, 12 * " ")}
         """
         return out_str.strip()
 

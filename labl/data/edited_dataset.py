@@ -9,7 +9,7 @@ from transformers.utils.import_utils import is_pandas_available
 from labl.data.base_sequence import BaseLabeledDataset
 from labl.data.edited_entry import EditedEntry, MultiEditEntry
 from labl.utils.tokenizer import Tokenizer, get_tokenizer
-from labl.utils.typing import LabelType
+from labl.utils.typing import InfoDictType, LabelType
 
 
 class EditedDataset(BaseLabeledDataset[EditedEntry]):
@@ -26,6 +26,7 @@ class EditedDataset(BaseLabeledDataset[EditedEntry]):
         cls,
         texts: list[str],
         edits: list[str] | list[list[str]],
+        infos: list[InfoDictType] | list[list[InfoDictType]] | None = None,
         tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
         tokenizer_kwargs: dict = {},
         with_gaps: bool = True,
@@ -41,6 +42,10 @@ class EditedDataset(BaseLabeledDataset[EditedEntry]):
                 The set of text.
             edits (list[str] | list[list[str]] | None):
                 One or more edited version for each text.
+            infos (list[dict[str, str | int | float | bool]] | list[list[dict[str, str | int | float | bool]]] | None):
+                A list of dictionaries containing additional information for each entry.
+                If multiple edits are provided for each text, `infos` can be a list of lists of dictionaries (one per
+                edit per entry). If None, no additional information is added. Defaults to None.
             tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A `Tokenizer`
                 used for tokenization. Supports initialization from a `transformers.PreTrainedTokenizer`, and uses
                 whitespace tokenization by default.
@@ -54,6 +59,8 @@ class EditedDataset(BaseLabeledDataset[EditedEntry]):
             gap_token (str): The token to use for gaps. Default: "▁".
         """
         tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
+        if infos is None:
+            infos = [{}] * len(texts)
         return cls(
             [
                 EditedEntry.from_edits(
@@ -65,9 +72,13 @@ class EditedDataset(BaseLabeledDataset[EditedEntry]):
                     ins_label=ins_label,
                     del_label=del_label,
                     gap_token=gap_token,
+                    info=info,
                 )
-                for text, edit in tqdm(
-                    zip(texts, edits, strict=True), desc="Creating EditedDataset", total=len(texts), unit="entries"
+                for text, edit, info in tqdm(
+                    zip(texts, edits, infos, strict=True),
+                    desc="Creating EditedDataset",
+                    total=len(texts),
+                    unit="entries",
                 )
             ]
         )
@@ -81,6 +92,7 @@ class EditedDataset(BaseLabeledDataset[EditedEntry]):
         text_column: str,
         edit_column: str,
         entry_ids: str | list[str],
+        infos_columns: list[str] = [],
         tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
         tokenizer_kwargs: dict[str, Any] = {},
         with_gaps: bool = True,
@@ -101,6 +113,7 @@ class EditedDataset(BaseLabeledDataset[EditedEntry]):
             edit_column (str): The name of the column in the dataframe containing the edited text.
             entry_ids (str | list[str]): One or more column names acting as unique identifiers for each entry. If
                 multiple entries are found with the same `entry_ids`, they are all treated as edits of the same text.
+            infos (list[str]): A list of columns containing additional information for each entry.
             tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None, optional): A `Tokenizer`
                 used for tokenization. Supports initialization from a `transformers.PreTrainedTokenizer`, and uses
                 whitespace tokenization by default.
@@ -122,21 +135,29 @@ class EditedDataset(BaseLabeledDataset[EditedEntry]):
 
         tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
         df = cast(pd.DataFrame, df)
+        if isinstance(entry_ids, str):
+            entry_ids = [entry_ids]
         grouped_dfs = df.groupby(entry_ids).size().reset_index()
         all_texts = []
         all_edits = []
+        all_infos = []
         for _, entry_row in tqdm(
             grouped_dfs.iterrows(), desc="Extracting texts and edits", total=len(grouped_dfs), unit="entries"
         ):
             curr_vals = [entry_row[col] for col in entry_ids]
-            selected_rows = df[(df[entry_ids] == curr_vals).all(axis=1)]
-            text = selected_rows[text_column].tolist()[0]
-            edits = selected_rows[edit_column].tolist()
+            edit_rows = df[(df[entry_ids] == curr_vals).all(axis=1)]
+            text = edit_rows[text_column].tolist()[0]
+            edits = edit_rows[edit_column].tolist()
             all_texts.append(text)
             all_edits.append(edits)
+            infos = []
+            for _, edit_row in edit_rows.iterrows():
+                infos.append({col: edit_row[col] for col in infos_columns})
+            all_infos.append(infos)
         return EditedDataset.from_edits(
             all_texts,
             all_edits,
+            all_infos,
             tokenizer=tokenizer,
             with_gaps=with_gaps,
             sub_label=sub_label,

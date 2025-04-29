@@ -14,7 +14,7 @@ from labl.data.base_sequence import BaseMultiLabelEntry
 from labl.utils.span import Span, SpanList
 from labl.utils.token import LabeledToken, LabeledTokenList
 from labl.utils.tokenizer import Tokenizer, WhitespaceTokenizer, get_tokenizer
-from labl.utils.typing import LabeledEntryDictType, LabelType, OffsetType, SpanType
+from labl.utils.typing import InfoDictType, LabeledEntryDictType, LabelType, OffsetType, SpanType
 
 logger = getLogger(__name__)
 
@@ -44,6 +44,7 @@ class LabeledEntry(BaseLabeledEntry):
             to the i-th token in `tokens`. The offsets are tuples of the form `(start, end)` corresponding to start and
             end positions of the token in `text`. If the token does not exist in `text`, the offset is `None`.
         label_types (list[type]): A list of the types of labels for the entry.
+        info (dict[str, str | int | float | bool]): A dictionary containing additional information about the entry.
     """
 
     # Private constructor key to prevent direct instantiation
@@ -57,6 +58,7 @@ class LabeledEntry(BaseLabeledEntry):
         tokens: list[str],
         tokens_labels: Sequence[LabelType],
         tokens_offsets: list[OffsetType],
+        info: InfoDictType = {},
         constructor_key: object | None = None,
     ):
         """Private constructor for `LabeledEntry`.
@@ -93,6 +95,7 @@ class LabeledEntry(BaseLabeledEntry):
         self._tokens = tokens
         self._tokens_labels = tokens_labels
         self._tokens_offsets = tokens_offsets
+        self._info = info
         self._label_types = self._get_label_types()
 
     def __str__(self) -> str:
@@ -176,6 +179,7 @@ class LabeledEntry(BaseLabeledEntry):
         spans: list[Span] | list[SpanType],
         tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
         tokenizer_kwargs: dict = {},
+        info: InfoDictType = {},
     ) -> "LabeledEntry":
         """Create a `LabeledEntry` from a text and a list of spans.
 
@@ -189,6 +193,8 @@ class LabeledEntry(BaseLabeledEntry):
                 used for tokenization. Supports initialization from a `transformers.PreTrainedTokenizer`, and uses
                 whitespace tokenization by default.
             tokenizer_kwargs (dict): Additional arguments for the tokenizer.
+            info (dict[str, str | int | float | bool]):
+                A dictionary containing additional information about the entry.
         """
         tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
         spans = Span.from_list(spans)
@@ -201,6 +207,7 @@ class LabeledEntry(BaseLabeledEntry):
             tokens=tokens,
             tokens_labels=tokens_labels,
             tokens_offsets=tokens_offsets,
+            info=info,
             constructor_key=cls.__constructor_key,
         )
 
@@ -212,6 +219,7 @@ class LabeledEntry(BaseLabeledEntry):
         keep_tags: list[str] = [],
         ignore_tags: list[str] = [],
         tokenizer_kwargs: dict = {},
+        info: InfoDictType = {},
     ) -> "LabeledEntry":
         """Create a `LabeledEntry` from a tagged text.
 
@@ -227,6 +235,8 @@ class LabeledEntry(BaseLabeledEntry):
                 Tag(s) that are present in the text but should be ignored while parsing. If not provided, all tags
                 are kept (Default: []).
             tokenizer_kwargs (dict): Additional arguments for the tokenizer.
+            info (dict[str, str | int | float | bool]):
+                A dictionary containing additional information about the entry.
         """
         tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
         text, spans = cls.get_text_and_spans_from_tagged(tagged=tagged, keep_tags=keep_tags, ignore_tags=ignore_tags)
@@ -238,6 +248,7 @@ class LabeledEntry(BaseLabeledEntry):
             tokens=tokens,
             tokens_labels=tokens_labels,
             tokens_offsets=tokens_offsets,
+            info=info,
             constructor_key=cls.__constructor_key,
         )
 
@@ -252,6 +263,7 @@ class LabeledEntry(BaseLabeledEntry):
         ignore_labels: list[str] = [],
         tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
         tokenizer_kwargs: dict = {},
+        info: InfoDictType = {},
     ) -> "LabeledEntry":
         """Create a `LabeledEntry` from a list of tokens.
 
@@ -277,6 +289,8 @@ class LabeledEntry(BaseLabeledEntry):
                 Label(s) that are present on tokens but should be ignored while parsing. If not provided, all labels
                 are kept (Default: []).
             tokenizer_kwargs (dict): Additional arguments for the tokenizer.
+            info (dict[str, str | int | float | bool]):
+                A dictionary containing additional information about the entry.
 
         Example:
             ```python
@@ -312,6 +326,7 @@ class LabeledEntry(BaseLabeledEntry):
             tokens=tokens,
             tokens_labels=labels,
             tokens_offsets=offsets,
+            info=info,
             constructor_key=cls.__constructor_key,
         )
 
@@ -575,6 +590,7 @@ class LabeledEntry(BaseLabeledEntry):
         return LabeledEntryDictType(
             {
                 "_class": self.__class__.__name__,
+                "info": self.info,
                 "text": self.text,
                 "tagged": self.tagged,
                 "tokens": self.tokens,
@@ -605,6 +621,7 @@ class LabeledEntry(BaseLabeledEntry):
             tokens=data["tokens"],
             tokens_labels=data["tokens_labels"],
             tokens_offsets=data["tokens_offsets"],
+            info=data["info"],
             constructor_key=cls.__constructor_key,
         )
 
@@ -613,6 +630,8 @@ class LabeledEntry(BaseLabeledEntry):
     def _get_labeled_str(self) -> str:
         tokens_str = str(self.labeled_tokens).replace("\n", "\n" + 8 * " ")
         spans_str = str(self._spans).replace("\n", "\n" + 8 * " ").strip()
+        info_str = "\n".join([f"{k}: {v}" for k, v in self._info.items()])
+        info_str = info_str.replace("\n", "\n" + 8 * " ")
         out_str = f"""\
         tagged:
         {indent(self._tagged, 7 * " ")}
@@ -620,6 +639,8 @@ class LabeledEntry(BaseLabeledEntry):
         {indent(tokens_str, 7 * " ")}
         spans:
         {indent(spans_str, 7 * " ")}
+        info:
+        {indent(info_str, 7 * " ")}
         """
         return out_str.strip()
 

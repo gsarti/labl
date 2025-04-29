@@ -4,10 +4,12 @@ from typing import TypedDict
 LabelType = str | int | float | None
 OffsetType = tuple[int, int] | None
 SpanType = dict[str, LabelType]
+InfoDictType = dict[str, str | int | float | bool]
 
 
 class SerializableDictType(TypedDict):
     _class: str
+    info: InfoDictType
 
 
 class EntrySequenceDictType(SerializableDictType):
