@@ -31,6 +31,9 @@ class BaseLabeledSequence(LabeledInterface, list[LabeledObject], ABC):
         self._label_types = self._get_label_types()
         self._info = info
 
+    def __add__(self: SequenceType, other: SequenceType) -> SequenceType:
+        return self.__class__(entry for entry in list(self) + list(other))
+
     def __sub__(self: SequenceType, other: SequenceType) -> SequenceType:
         return self.__class__(entry for entry in self if entry not in other)
 

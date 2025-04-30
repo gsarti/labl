@@ -7,7 +7,7 @@ from transformers.utils.import_utils import is_datasets_available, is_pandas_ava
 from labl.data.edited_dataset import EditedDataset
 from labl.utils.tokenizer import Tokenizer
 
-Qe4peTask = Literal["pretask", "main", "posttask"]
+Qe4peTask = Literal["oracle_pe", "pretask", "main", "posttask"]
 Qe4peLanguage = Literal["ita", "nld"]
 Qe4peDomain = Literal["biomedical", "social"]
 Qe4peSpeedGroup = Literal["faster", "avg", "slower"]
@@ -107,20 +107,23 @@ def load_qe4pe(
             lang_df = df[(df["tgt_lang"] == lang) & df["wmt_category"].isin(domains)]
             lang_df = lang_df[
                 lang_df["translator_main_id"].str.endswith(tuple(SPEED_MAP[g] for g in speed_groups))
-                | lang_df["highlight_modality"].isin(highlight_modalities)
+                & lang_df["highlight_modality"].isin(highlight_modalities)
             ]
+            infos_columns = [
+                "wmt_category",
+                "doc_id",
+                "segment_in_doc_id",
+                "translator_main_id",
+                "highlight_modality",
+            ]
+            if config == "main":
+                infos_columns += ["qa_mt_annotator_id", "qa_mt_esa_rating", "qa_pe_annotator_id", "qa_pe_esa_rating"]
             labl_dataset = EditedDataset.from_edits_dataframe(
                 lang_df,
                 text_column="mt_text",
                 edit_column="pe_text",
                 entry_ids=["doc_id", "segment_in_doc_id"],
-                infos_columns=[
-                    "wmt_category",
-                    "doc_id",
-                    "segment_in_doc_id",
-                    "translator_main_id",
-                    "highlight_modality",
-                ],
+                infos_columns=infos_columns,
                 tokenizer=tokenizer,
                 tokenizer_kwargs=tokenizer_kwargs,
                 with_gaps=with_gaps,
