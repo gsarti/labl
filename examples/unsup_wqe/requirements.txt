@@ -1,0 +1,5 @@
+labl @ git+https://github.com/gsarti/labl.git@main
+inseq @ git+http://github.com/inseq-team/inseq.git@main
+datasets
+ipykernel
+ipywidgets
