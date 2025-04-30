@@ -7,6 +7,7 @@
         - label_counts
         - tokens_with_label_counts
         - get_agreement
+        - get_correlation
 
 
 ::: labl.data.labeled_entry.MultiLabelEntry

@@ -60,10 +60,7 @@ class ReduceToListOfListOfTokens(ReduceToListOfListOfWords):
             self.tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast = tokenizer_or_id
 
     def process_string(self, s: str):
-        if self.add_special_tokens:
-            ids: list[int] = self.tokenizer(text_target=s).input_ids
-            tokens = self.tokenizer.convert_ids_to_tokens(ids)
-            tokens = cast(list[str], tokens)
-            return [tokens]
-        tokens = self.tokenizer.tokenize(s)
+        ids: list[int] = self.tokenizer(text_target=s, add_special_tokens=self.add_special_tokens).input_ids
+        tokens = self.tokenizer.convert_ids_to_tokens(ids)
+        tokens = cast(list[str], tokens)
         return [tokens]

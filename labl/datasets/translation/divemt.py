@@ -21,6 +21,7 @@ def load_divemt(
     tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
     tokenizer_kwargs: dict[str, Any] = {},
     with_gaps: bool = True,
+    keep_final_gap: bool = True,
     sub_label: str = "S",
     ins_label: str = "I",
     del_label: str = "D",
@@ -45,6 +46,8 @@ def load_divemt(
             Additional arguments for the tokenizer.
         with_gaps (bool, *optional*):
             Whether to include gaps in the tokenization. Defaults to True.
+        keep_final_gap (bool): Whether to keep the final gap when merging gaps to account for end insertions.
+            If false, information about end insertion is lost. Default: True.
         sub_label (str, *optional*):
             The label for substitutions. Defaults to "S".
         ins_label (str, *optional*):
@@ -91,6 +94,7 @@ def load_divemt(
                     tokenizer=tokenizer,
                     tokenizer_kwargs=tokenizer_kwargs,
                     with_gaps=with_gaps,
+                    keep_final_gap=keep_final_gap,
                     sub_label=sub_label,
                     ins_label=ins_label,
                     del_label=del_label,

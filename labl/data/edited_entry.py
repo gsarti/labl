@@ -529,7 +529,7 @@ class EditedEntry(BaseLabeledEntry):
     ):
         if toks is None or offs is None:
             all_toks, all_offs = t.tokenize_with_offsets(text, add_gaps=True, gap_token=gap_token)
-        elif not t._has_gaps(toks, offs):
+        elif not t._has_gaps(toks, offs, gap_token=gap_token):
             all_toks, all_offs = t._add_gaps_to_tokens_and_offsets([toks], [offs], gap_token=gap_token)
         else:
             all_toks, all_offs = [toks], [offs]

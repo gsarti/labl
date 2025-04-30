@@ -1,13 +1,13 @@
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import numpy as np
 import numpy.typing as npt
 from krippendorff.krippendorff import LevelOfMeasurement
 
 from labl.data.labeled_interface import LabeledInterface
-from labl.utils.agreement import AgreementOutput, get_labels_agreement
+from labl.utils.agreement import CorrelationType, MetricOutput, compute_agreement, compute_correlation
 from labl.utils.typing import LabelType
 
 EntryType = TypeVar("EntryType", bound="BaseLabeledEntry")
@@ -55,22 +55,27 @@ class BaseLabeledEntry(LabeledInterface, ABC):
         self: EntryType,
         other: EntryType,
         level_of_measurement: LevelOfMeasurement | None = None,
-    ) -> AgreementOutput:
+    ) -> MetricOutput:
         """Compute the inter-annotator agreement for the token labels of two entries using
         [Krippendorff's alpha](https://en.wikipedia.org/wiki/Krippendorff%27s_alpha).
         """
-        self._validate_single_label_type()
-        other._validate_single_label_type()
-        if self.label_types[0] != other.label_types[0]:
-            raise RuntimeError(
-                f"Label type does not match: {self.label_types[0]} vs {other.label_types[0]}.\n"
-                "Transform the annotations using `.relabel` to ensure a single type is present."
-            )
-        labels_array = self._get_labels_array([self, other], dtype=self.label_types[0])
-        return get_labels_agreement(
-            label_type=self.label_types[0],
-            labels_array=labels_array,
-            level_of_measurement=level_of_measurement,
+        return self._compute_metric(
+            other=other, metric_fn=compute_agreement, level_of_measurement=level_of_measurement
+        )
+
+    def get_correlation(
+        self: EntryType,
+        other: EntryType,
+        correlation_type: CorrelationType | None = None,
+        correlation_kwargs: dict[str, Any] = {},
+    ) -> MetricOutput:
+        """Compute the correlation for the token labels of two entries using PearsonR, SpearmanR, or KendallTau."""
+        return self._compute_metric(
+            other=other,
+            metric_fn=compute_correlation,
+            requires_single_label_type=False,
+            correlation_type=correlation_type,
+            correlation_kwargs=correlation_kwargs,
         )
 
     ### Helper Functions ###
@@ -84,3 +89,22 @@ class BaseLabeledEntry(LabeledInterface, ABC):
         self, items: Sequence[EntryType], dtype: type | None = None
     ) -> npt.NDArray[np.str_ | np.integer | np.floating]:
         pass
+
+    def _compute_metric(
+        self: EntryType,
+        other: EntryType,
+        metric_fn: Callable[..., MetricOutput],
+        requires_single_label_type: bool = True,
+        **metric_fn_kwargs,
+    ) -> MetricOutput:
+        """Compute a metric for the token labels of two entries using a custom metric function."""
+        if requires_single_label_type:
+            self._validate_single_label_type()
+            other._validate_single_label_type()
+            if self.label_types[0] != other.label_types[0]:
+                raise RuntimeError(
+                    f"Label type does not match: {self.label_types[0]} vs {other.label_types[0]}.\n"
+                    "Transform the annotations using `.relabel` to ensure a single type is present."
+                )
+        labels_array = self._get_labels_array([self, other], dtype=self.label_types[0])
+        return metric_fn(self.label_types[0], labels_array, **metric_fn_kwargs)

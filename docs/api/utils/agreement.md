@@ -1,10 +1,10 @@
-::: labl.utils.agreement.AgreementOutput
+::: labl.utils.agreement.MetricOutput
     handler: python
     options:
       show_root_heading: true
       show_source: true
 
-::: labl.utils.agreement.get_labels_agreement
+::: labl.utils.agreement.compute_agreement
     handler: python
     options:
       show_root_heading: true

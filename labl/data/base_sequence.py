@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable
-from typing import TypeVar, cast
+from typing import Any, TypeVar, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -10,7 +10,7 @@ import labl
 import labl.data
 from labl.data.base_entry import BaseLabeledEntry, EntryType
 from labl.data.labeled_interface import LabeledInterface, LabeledObject
-from labl.utils.agreement import AgreementOutput, get_labels_agreement
+from labl.utils.agreement import CorrelationType, MetricOutput, compute_agreement, compute_correlation
 from labl.utils.token import LabeledToken, LabeledTokenList
 from labl.utils.typing import EntrySequenceDictType, InfoDictType, LabelType
 
@@ -124,16 +124,28 @@ class BaseMultiLabelEntry(BaseLabeledSequence[EntryType], ABC):
     def get_agreement(
         self,
         level_of_measurement: LevelOfMeasurement | None = None,
-    ) -> AgreementOutput:
+    ) -> MetricOutput:
         """Compute the inter-annotator agreement for the token labels of all label sets using
         [Krippendorff's alpha](https://en.wikipedia.org/wiki/Krippendorff%27s_alpha).
         """
         self._validate_single_label_type()
         labels_array = self._get_labels_array(dtype=self.label_types[0])
-        return get_labels_agreement(
+        return compute_agreement(
             label_type=self.label_types[0],
             labels_array=labels_array,
             level_of_measurement=level_of_measurement,
+        )
+
+    def get_correlation(
+        self, correlation_type: CorrelationType | None = None, correlation_kwargs: dict[str, Any] = {}
+    ) -> MetricOutput:
+        """Compute the correlation for the token labels of two entries using PearsonR, SpearmanR, or KendallTau."""
+        labels_array = self._get_labels_array(dtype=self.label_types[0])
+        return compute_correlation(
+            label_type=self.label_types[0],
+            labels_array=labels_array,
+            correlation_type=correlation_type,
+            correlation_kwargs=correlation_kwargs,
         )
 
     ### Helper Functions ###
@@ -153,23 +165,29 @@ class BaseLabeledDataset(BaseLabeledSequence[EntryType | BaseMultiLabelEntry[Ent
         self,
         other: BaseLabeledSequence[EntryType | BaseMultiLabelEntry[EntryType]] | None = None,
         level_of_measurement: LevelOfMeasurement | None = None,
-    ) -> AgreementOutput:
+    ) -> MetricOutput:
         """Compute the inter-annotator agreement for the token labels of all label sets using
         [Krippendorff's alpha](https://en.wikipedia.org/wiki/Krippendorff%27s_alpha).
         """
-        self._validate_single_label_type()
-        if other is not None:
-            other._validate_single_label_type()
-            if self.label_types[0] != other.label_types[0]:
-                raise RuntimeError(
-                    f"Label type does not match: {self.label_types[0]} vs {other.label_types[0]}.\n"
-                    "Transform the annotations using `.relabel` to ensure a single type is present."
-                )
-        labels_array = self._get_labels_array(other=other, dtype=self.label_types[0])
-        return get_labels_agreement(
-            label_type=self.label_types[0],
-            labels_array=labels_array,
+        return self._compute_metric(
+            other=other,
+            metric_fn=compute_agreement,
             level_of_measurement=level_of_measurement,
+        )
+
+    def get_correlation(
+        self,
+        other: BaseLabeledSequence[EntryType | BaseMultiLabelEntry[EntryType]] | None = None,
+        correlation_type: CorrelationType | None = None,
+        correlation_kwargs: dict[str, Any] = {},
+    ) -> MetricOutput:
+        """Compute the correlation for the token labels of two entries using PearsonR, SpearmanR, or KendallTau."""
+        return self._compute_metric(
+            other=other,
+            metric_fn=compute_correlation,
+            requires_single_label_type=False,
+            correlation_type=correlation_type,
+            correlation_kwargs=correlation_kwargs,
         )
 
     ### Helper Functions ###
@@ -207,3 +225,27 @@ class BaseLabeledDataset(BaseLabeledSequence[EntryType | BaseMultiLabelEntry[Ent
             )
         else:
             raise RuntimeError("All entries must have either a single or multiple labels to extract labels.")
+
+    def _compute_metric(
+        self,
+        metric_fn: Callable[..., MetricOutput],
+        other: BaseLabeledSequence[EntryType | BaseMultiLabelEntry[EntryType]] | None = None,
+        requires_single_label_type: bool = True,
+        **metric_fn_kwargs,
+    ) -> MetricOutput:
+        """Compute a metric for the token labels of two entries using a custom metric function."""
+        if requires_single_label_type:
+            self._validate_single_label_type()
+            if other is not None:
+                other._validate_single_label_type()
+                if self.label_types[0] != other.label_types[0]:
+                    raise RuntimeError(
+                        f"Label type does not match: {self.label_types[0]} vs {other.label_types[0]}.\n"
+                        "Transform the annotations using `.relabel` to ensure a single type is present."
+                    )
+        labels_array = self._get_labels_array(other=other, dtype=self.label_types[0])
+        return metric_fn(
+            label_type=self.label_types[0],
+            labels_array=labels_array,
+            **metric_fn_kwargs,
+        )

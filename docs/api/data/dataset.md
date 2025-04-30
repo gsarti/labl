@@ -7,6 +7,7 @@
       show_source: true
       members:
         - get_agreement
+        - get_correlation
 
 ::: labl.data.labeled_dataset.LabeledDataset
     handler: python

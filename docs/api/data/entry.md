@@ -6,6 +6,7 @@
       members:
         - relabel
         - get_agreement
+        - get_correlation
 
 ::: labl.data.labeled_entry.LabeledEntry
     handler: python

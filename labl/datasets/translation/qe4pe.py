@@ -24,8 +24,8 @@ def load_qe4pe(
     highlight_modalities: Qe4peHighlightModality | list[Qe4peHighlightModality] | None = None,
     tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
     tokenizer_kwargs: dict[str, Any] = {},
-    filter_issues: bool = True,
     with_gaps: bool = True,
+    keep_final_gap: bool = True,
     sub_label: str = "S",
     ins_label: str = "I",
     del_label: str = "D",
@@ -50,14 +50,14 @@ def load_qe4pe(
         highlight_modalities (Literal["no_highlight", "oracle", "supervised", "unsupervised"] | list[Literal["no_highlight", "oracle", "supervised", "unsupervised"]] | None, *optional*):
             One or more highlight modalities to load. Defaults to all modalities.
             Available options: "no_highlight", "oracle", "supervised", "unsupervised".
-        filter_issues (bool, *optional*):
-            Whether to filter out issues from the dataset. Defaults to True.
         tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast, *optional*):
             The tokenizer to use for tokenization. If None, a default whitespace tokenizer will be used.
         tokenizer_kwargs (dict[str, Any], *optional*):
             Additional arguments for the tokenizer.
         with_gaps (bool, *optional*):
             Whether to include gaps in the tokenization. Defaults to True.
+        keep_final_gap (bool): Whether to keep the final gap when merging gaps to account for end insertions.
+                If false, information about end insertion is lost. Default: True.
         sub_label (str, *optional*):
             The label for substitutions. Defaults to "S".
         ins_label (str, *optional*):
@@ -99,8 +99,6 @@ def load_qe4pe(
     for config in configs:
         dataset = cast(DatasetDict, load_dataset("gsarti/qe4pe", config))
         df = cast(pd.DataFrame, dataset["train"].to_pandas())
-        if filter_issues:
-            df = df[(~df["has_issue"]) & (df["translator_main_id"] != "no_highlight_t4")]
         out_dict[config] = {}
         for lang in langs:
             print(f"Loading {config} task for eng->{lang}...")
@@ -110,6 +108,7 @@ def load_qe4pe(
                 & lang_df["highlight_modality"].isin(highlight_modalities)
             ]
             infos_columns = [
+                "has_issue",
                 "wmt_category",
                 "doc_id",
                 "segment_in_doc_id",
@@ -127,6 +126,7 @@ def load_qe4pe(
                 tokenizer=tokenizer,
                 tokenizer_kwargs=tokenizer_kwargs,
                 with_gaps=with_gaps,
+                keep_final_gap=keep_final_gap,
                 sub_label=sub_label,
                 ins_label=ins_label,
                 del_label=del_label,

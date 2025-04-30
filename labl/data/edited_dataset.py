@@ -30,10 +30,12 @@ class EditedDataset(BaseLabeledDataset[EditedEntry]):
         tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
         tokenizer_kwargs: dict = {},
         with_gaps: bool = True,
+        keep_final_gap: bool = True,
         sub_label: str = "S",
         ins_label: str = "I",
         del_label: str = "D",
         gap_token: str = "▁",
+        show_progress: bool = True,
     ) -> "EditedDataset":
         """Create an `EditedDataset` from a set of texts and one or more edits for each text.
 
@@ -53,10 +55,13 @@ class EditedDataset(BaseLabeledDataset[EditedEntry]):
             with_gaps (bool): Whether to add gaps to the tokens and offsets. Gaps are used to mark the positions of
                 insertions and deletions in the original/edited texts, respectively. If false, those are merged to the
                 next token to the right. Default: True.
+            keep_final_gap (bool): Whether to keep the final gap when merging gaps to account for end insertions.
+                If false, information about end insertion is lost. Default: True.
             sub_label (str): The label for substitutions. Default: "S".
             ins_label (str): The label for insertions. Default: "I".
             del_label (str): The label for deletions. Default: "D".
             gap_token (str): The token to use for gaps. Default: "▁".
+            show_progress (bool): Whether to show a progress bar. Default: True.
         """
         tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
         if infos is None:
@@ -68,6 +73,7 @@ class EditedDataset(BaseLabeledDataset[EditedEntry]):
                     edits=edit,
                     tokenizer=tokenizer,
                     with_gaps=with_gaps,
+                    keep_final_gap=keep_final_gap,
                     sub_label=sub_label,
                     ins_label=ins_label,
                     del_label=del_label,
@@ -79,6 +85,7 @@ class EditedDataset(BaseLabeledDataset[EditedEntry]):
                     desc="Creating EditedDataset",
                     total=len(texts),
                     unit="entries",
+                    disable=not show_progress,
                 )
             ]
         )
@@ -96,10 +103,12 @@ class EditedDataset(BaseLabeledDataset[EditedEntry]):
         tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
         tokenizer_kwargs: dict[str, Any] = {},
         with_gaps: bool = True,
+        keep_final_gap: bool = True,
         sub_label: str = "S",
         ins_label: str = "I",
         del_label: str = "D",
         gap_token: str = "▁",
+        show_progress: bool = True,
     ) -> "EditedDataset":
         """Create an `EditedDataset` from a `pandas.DataFrame` with edits.
 
@@ -121,10 +130,13 @@ class EditedDataset(BaseLabeledDataset[EditedEntry]):
             with_gaps (bool): Whether to add gaps to the tokens and offsets. Gaps are used to mark the positions of
                 insertions and deletions in the original/edited texts, respectively. If false, those are merged to the
                 next token to the right. Default: True.
+            keep_final_gap (bool): Whether to keep the final gap when merging gaps to account for end insertions.
+                If false, information about end insertion is lost. Default: True.
             sub_label (str): The label for substitutions. Default: "S".
             ins_label (str): The label for insertions. Default: "I".
             del_label (str): The label for deletions. Default: "D".
             gap_token (str): The token to use for gaps. Default: "▁".
+            show_progress (bool): Whether to show a progress bar. Default: True.
 
         Returns:
             An `EditedDataset` initialized from the set of texts and edits.
@@ -141,9 +153,7 @@ class EditedDataset(BaseLabeledDataset[EditedEntry]):
         all_texts = []
         all_edits = []
         all_infos = []
-        for _, entry_row in tqdm(
-            grouped_dfs.iterrows(), desc="Extracting texts and edits", total=len(grouped_dfs), unit="entries"
-        ):
+        for _, entry_row in grouped_dfs.iterrows():
             curr_vals = [entry_row[col] for col in entry_ids]
             edit_rows = df[(df[entry_ids] == curr_vals).all(axis=1)]
             text = edit_rows[text_column].tolist()[0]
@@ -160,10 +170,12 @@ class EditedDataset(BaseLabeledDataset[EditedEntry]):
             all_infos,
             tokenizer=tokenizer,
             with_gaps=with_gaps,
+            keep_final_gap=keep_final_gap,
             sub_label=sub_label,
             ins_label=ins_label,
             del_label=del_label,
             gap_token=gap_token,
+            show_progress=show_progress,
         )
 
     ### Utility functions ###

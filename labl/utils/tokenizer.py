@@ -436,8 +436,8 @@ class HuggingfaceTokenizer(Tokenizer):
                 add_special_tokens=add_special_tokens,
                 **kwargs,
             ),
-            has_bos_token=has_bos_token,
-            has_eos_token=has_eos_token,
+            has_bos_token=has_bos_token if add_special_tokens else False,
+            has_eos_token=has_eos_token if add_special_tokens else False,
         )
         self.transform = cast(ReduceToListOfListOfTokens, self.transform)
 
@@ -475,7 +475,9 @@ class HuggingfaceTokenizer(Tokenizer):
         all_tokens = []
         all_offsets = []
         for sentence in texts:
-            encoding: BatchEncoding = self.transform.tokenizer(text_target=sentence, return_offsets_mapping=True)
+            encoding: BatchEncoding = self.transform.tokenizer(
+                text_target=sentence, return_offsets_mapping=True, add_special_tokens=self.transform.add_special_tokens
+            )
             tokens = encoding.tokens()
             offsets = [tup if tup[0] != 0 or tup[1] != 0 else None for tup in encoding.offset_mapping]
             offsets = cast(list[OffsetType], offsets)
