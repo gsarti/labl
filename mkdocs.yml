@@ -11,14 +11,16 @@ nav:
   - Tutorials:
     - Edit Analysis: notebooks/edit_analysis.ipynb
   - API Reference:
-    - Utils:
-      - Base Classes: api/utils/utils.md
-      - Tokenizer: api/utils/tokenizer.md
-      - Agreement: api/utils/agreement.md
+    - Datasets:
+      - Translation: api/datasets/translation.md
     - Data:
       - Entry: api/data/entry.md
       - MultiLabelEntry: api/data/multilabel.md
       - Dataset: api/data/dataset.md
+    - Utils:
+      - Base Classes: api/utils/utils.md
+      - Tokenizer: api/utils/tokenizer.md
+      - Agreement: api/utils/agreement.md
 
 plugins:
   - search
@@ -57,7 +59,7 @@ plugins:
 theme:
   name: material
   custom_dir: docs/assets
-  logo: assets/img/labl_logo.png
+  logo: assets/img/labl_logo_white_border.png
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
@@ -90,7 +92,7 @@ theme:
     - search.suggest
   icon:
     logo: logo
-  favicon: assets/img/labl_logo.png
+  favicon: assets/img/labl_icon.png
   font:
     text: Roboto
     code: Roboto Mono

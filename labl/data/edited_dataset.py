@@ -113,7 +113,7 @@ class EditedDataset(BaseLabeledDataset[EditedEntry]):
             edit_column (str): The name of the column in the dataframe containing the edited text.
             entry_ids (str | list[str]): One or more column names acting as unique identifiers for each entry. If
                 multiple entries are found with the same `entry_ids`, they are all treated as edits of the same text.
-            infos (list[str]): A list of columns containing additional information for each entry.
+            infos_columns (list[str]): A list of columns containing additional information for each entry.
             tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None, optional): A `Tokenizer`
                 used for tokenization. Supports initialization from a `transformers.PreTrainedTokenizer`, and uses
                 whitespace tokenization by default.
