@@ -1,5 +1,6 @@
-labl @ git+https://github.com/gsarti/labl.git@main
+labl==0.1.1
 inseq @ git+http://github.com/inseq-team/inseq.git@main
+jaxtyping
 datasets
 ipykernel
 ipywidgets
