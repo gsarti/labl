@@ -50,6 +50,8 @@ def main(cfg: Config) -> None:
             with open(curr_fname) as f:
                 out_dicts = json.load(f)["data"]
         start_idx = len(out_dicts)
+        if start_idx > 0:
+            print(f"Skipping {len(out_dicts)} entries already processed for {lang}...")
         sources = src_texts[start_idx:]
         targets = mt_texts[start_idx:]
         print(f"Processing {lang} ({len(sources)} entries)...")
