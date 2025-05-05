@@ -1,6 +1,7 @@
 labl==0.1.1
 inseq @ git+http://github.com/inseq-team/inseq.git@main
-jaxtyping
+unbabel-comet
 datasets
+jaxtyping
 ipykernel
 ipywidgets
