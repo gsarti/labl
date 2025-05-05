@@ -36,7 +36,7 @@ def main(cfg: Config) -> None:
         curr_fname.parent.mkdir(parents=True, exist_ok=True)
         for src, mt in zip(src_texts, mt_texts, strict=True):
             # Compute metrics
-            out = model.attribute(src, mt, step_scores=["unsupervised_qe_metrics_fn"])[0]
+            out = model.attribute(src, mt, step_scores=["unsupervised_qe_metrics_fn"], show_progress=False)[0]
             mt_tokens = [t.token for t in out.target[1:]]
             out_metrics = out.step_scores["unsupervised_qe_metrics_fn"]  # type: ignore
             metric_names = get_metric_names(model)
@@ -45,7 +45,9 @@ def main(cfg: Config) -> None:
             )
 
             # Add attention metrics
-            out_attn = model.attribute(src, mt, method="attention", attribute_target=model.is_encoder_decoder)[0]
+            out_attn = model.attribute(
+                src, mt, method="attention", attribute_target=model.is_encoder_decoder, show_progress=False
+            )[0]
             if (
                 model.is_encoder_decoder
                 and isinstance(out_attn.source_attributions, torch.Tensor)
