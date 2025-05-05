@@ -6,6 +6,7 @@ from transformers.utils.import_utils import is_datasets_available, is_pandas_ava
 
 from labl.data.edited_dataset import EditedDataset
 from labl.utils.tokenizer import Tokenizer
+from labl.utils.typing import to_list
 
 Qe4peTask = Literal["oracle_pe", "pretask", "main", "posttask"]
 Qe4peLanguage = Literal["ita", "nld"]
@@ -17,8 +18,8 @@ SPEED_MAP = {"faster": "t1", "avg": "t2", "slower": "t3"}
 
 
 def load_qe4pe(
-    configs: Qe4peTask | list[Qe4peTask] = "main",
-    langs: Qe4peLanguage | list[Qe4peLanguage] = ["ita", "nld"],
+    configs: Qe4peTask | list[Qe4peTask] | None = None,
+    langs: Qe4peLanguage | list[Qe4peLanguage] | None = None,
     domains: Qe4peDomain | list[Qe4peDomain] | None = None,
     speed_groups: Qe4peSpeedGroup | list[Qe4peSpeedGroup] | None = None,
     highlight_modalities: Qe4peHighlightModality | list[Qe4peHighlightModality] | None = None,
@@ -79,22 +80,11 @@ def load_qe4pe(
 
     from datasets import DatasetDict, load_dataset
 
-    if isinstance(configs, str):
-        configs = [configs]
-    if isinstance(langs, str):
-        langs = [langs]
-    if domains is None:
-        domains = ["biomedical", "social"]
-    if isinstance(domains, str):
-        domains = [domains]
-    if speed_groups is None:
-        speed_groups = ["faster", "avg", "slower"]
-    if isinstance(speed_groups, str):
-        speed_groups = [speed_groups]
-    if highlight_modalities is None:
-        highlight_modalities = ["no_highlight", "oracle", "supervised", "unsupervised"]
-    if isinstance(highlight_modalities, str):
-        highlight_modalities = [highlight_modalities]
+    configs = to_list(configs, ["main"])
+    langs = to_list(langs, ["ita", "nld"])
+    domains = to_list(domains, ["biomedical", "social"])
+    speed_groups = to_list(speed_groups, ["faster", "avg", "slower"])
+    highlight_modalities = to_list(highlight_modalities, ["no_highlight", "oracle", "supervised", "unsupervised"])
     out_dict = {}
     for config in configs:
         dataset = cast(DatasetDict, load_dataset("gsarti/qe4pe", config))
@@ -108,6 +98,7 @@ def load_qe4pe(
                 & lang_df["highlight_modality"].isin(highlight_modalities)
             ]
             infos_columns = [
+                "src_text",
                 "has_issue",
                 "wmt_category",
                 "doc_id",

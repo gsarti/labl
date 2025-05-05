@@ -1,10 +1,12 @@
 from collections.abc import Sequence
-from typing import TypedDict
+from typing import TypedDict, TypeVar
 
 LabelType = str | int | float | None
 OffsetType = tuple[int, int] | None
 SpanType = dict[str, LabelType]
 InfoDictType = dict[str, str | int | float | bool]
+
+T = TypeVar("T")
 
 
 class SerializableDictType(TypedDict):
@@ -31,3 +33,11 @@ class EditedEntryDictType(SerializableDictType):
     has_bos_token: bool
     has_eos_token: bool
     has_gaps: bool
+
+
+def to_list(val: T | list[T] | None, default: list[T] = []) -> list[T]:
+    if val is None:
+        return default
+    if isinstance(val, list):
+        return list(val)
+    return [val]

@@ -6,6 +6,7 @@ from transformers.utils.import_utils import is_datasets_available, is_pandas_ava
 
 from labl.data.edited_dataset import EditedDataset
 from labl.utils.tokenizer import Tokenizer
+from labl.utils.typing import to_list
 
 DivemtTask = Literal["warmup", "main"]
 DivemtLanguage = Literal["ara", "nld", "ita", "tur", "ukr", "vie"]
@@ -15,9 +16,9 @@ MT_MODEL_MAP = {"gtrans": "pe1", "mbart50": "pe2"}
 
 
 def load_divemt(
-    configs: DivemtTask | list[DivemtTask] = "main",
-    langs: DivemtLanguage | list[DivemtLanguage] = ["ara", "nld", "ita", "tur", "ukr", "vie"],
-    mt_models: DivemtMTModel | list[DivemtMTModel] = ["gtrans", "mbart50"],
+    configs: DivemtTask | list[DivemtTask] | None = None,
+    langs: DivemtLanguage | list[DivemtLanguage] | None = None,
+    mt_models: DivemtMTModel | list[DivemtMTModel] | None = None,
     tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
     tokenizer_kwargs: dict[str, Any] = {},
     with_gaps: bool = True,
@@ -35,10 +36,10 @@ def load_divemt(
             One or more task configurations to load. Defaults to "main".
             Available options: "warmup", "main".
         langs (Literal["ara", "nld", "ita", "tur", "ukr", "vie"] | list[Literal["ara", "nld", "ita", "tur", "ukr", "vie"]], *optional*):
-            One or more languages to load. Defaults to ["ara", "nld", "ita", "tur", "ukr", "vie"].
+            One or more languages to load. Defaults to None (all languages).
             Available options: "ara", "nld", "ita", "tur", "ukr", "vie".
         mt_models (Literal["gtrans", "mbart50"] | list[Literal["gtrans", "mbart50"]], *optional*):
-            One or more models for which post-edits need to be loaded. Defaults to ["gtrans", "mbart50"].
+            One or more models for which post-edits need to be loaded. Defaults to None (all models).
             Available options: "gtrans", "mbart50".
         tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast, *optional*):
             The tokenizer to use for tokenization. If None, a default whitespace tokenizer will be used.
@@ -69,12 +70,9 @@ def load_divemt(
 
     from datasets import DatasetDict, load_dataset
 
-    if isinstance(configs, str):
-        configs = [configs]
-    if isinstance(langs, str):
-        langs = [langs]
-    if isinstance(mt_models, str):
-        mt_models = [mt_models]
+    configs = to_list(configs, ["main"])
+    langs = to_list(langs, ["ara", "nld", "ita", "tur", "ukr", "vie"])
+    mt_models = to_list(mt_models, ["gtrans", "mbart50"])
     out_dict = {}
     for config in configs:
         dataset = cast(DatasetDict, load_dataset("GroNLP/divemt", config))
@@ -90,7 +88,7 @@ def load_divemt(
                     text_column="mt_text",
                     edit_column="tgt_text",
                     entry_ids="item_id",
-                    infos_columns=["doc_id", "subject_id", "item_id"],
+                    infos_columns=["doc_id", "subject_id", "item_id", "src_text"],
                     tokenizer=tokenizer,
                     tokenizer_kwargs=tokenizer_kwargs,
                     with_gaps=with_gaps,

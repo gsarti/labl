@@ -8,4 +8,5 @@ recursive-include labl *.py
 
 exclude Makefile
 prune tests
-prune unsup_wqe_nmt
+prune examples
+prune docs

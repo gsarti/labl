@@ -8,6 +8,7 @@ from labl.data.labeled_dataset import LabeledDataset
 from labl.utils.cache import load_cached_or_download
 from labl.utils.span import Span
 from labl.utils.tokenizer import Tokenizer
+from labl.utils.typing import to_list
 
 Wmt24EsaLanguage = Literal["en-cs", "en-ja", "en-es", "en-zh", "en-hi", "en-is", "cs-uk", "en-uk", "en-ru"]
 Wmt24EsaDomain = Literal["speech", "social", "news", "literary", "education", "voice", "personal", "official"]
@@ -83,16 +84,11 @@ def load_wmt24esa(
     if not is_pandas_available():
         raise RuntimeError("The `pandas` library is not installed. Please install it to use this function.")
 
-    if langs is None:
-        langs = ["en-cs", "en-ja", "en-es", "en-zh", "en-hi", "en-is", "cs-uk", "en-uk", "en-ru"]
-    if isinstance(langs, str):
-        langs = [langs]
-    if domains is None:
-        domains = ["speech", "social", "news", "literary", "education", "voice", "personal", "official"]
-    if isinstance(domains, str):
-        domains = [domains]
-    if mt_models is None:
-        mt_models = [
+    langs = to_list(langs, ["en-cs", "en-ja", "en-es", "en-zh", "en-hi", "en-is", "cs-uk", "en-uk", "en-ru"])
+    domains = to_list(domains, ["speech", "social", "news", "literary", "education", "voice", "personal", "official"])
+    mt_models = to_list(
+        mt_models,
+        [
             "Unbabel-Tower70B",
             "CUNI-GA",
             "Gemini-1.5-Pro",
@@ -121,9 +117,8 @@ def load_wmt24esa(
             "CUNI-Transformer",
             "ONLINE-G",
             "Yandex",
-        ]
-    if isinstance(mt_models, str):
-        mt_models = [mt_models]
+        ],
+    )
     out_dict = {}
     df = load_cached_or_download(
         url="https://raw.githubusercontent.com/wmt-conference/wmt24-news-systems/refs/heads/main/jsonl/wmt24_esa.jsonl",
@@ -139,7 +134,7 @@ def load_wmt24esa(
                 print(f"Loading {model} annotations for {lang}...")
                 for _, row in filter_df.iterrows():
                     spans = []
-                    infos = {c: row[c] for c in ["line_id", "doc_id", "domain", "esa_score", "annotator"]}
+                    infos = {c: row[c] for c in ["line_id", "doc_id", "domain", "esa_score", "annotator", "src"]}
                     for span in row["esa_spans"]:
                         start, end = span["start_i"], span["end_i"]
                         if isinstance(start, int) and isinstance(end, int) and start < end:
