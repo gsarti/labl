@@ -19,8 +19,6 @@ class Config:
     langs: str | list[str] | None
     output_dir: str = "outputs"
     tokenizer_kwargs: dict[str, Any] = field(default_factory=dict)
-    start_idx: int | None = None
-    end_idx: int | None = None
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> "Config":
@@ -29,8 +27,6 @@ class Config:
             dataset_name=args.dataset_name,
             langs=args.langs,
             output_dir=args.output_dir,
-            start_idx=args.start_idx,
-            end_idx=args.end_idx,
         )
         if args.src_lang is not None and args.tgt_lang is not None:
             cfg.tokenizer_kwargs = {
@@ -41,30 +37,22 @@ class Config:
 
 
 def main(cfg: Config) -> None:
-    if cfg.start_idx is None:
-        cfg.start_idx = 0
     model = load_model(
         cfg.model_id, "dummy", tokenizer_kwargs=cfg.tokenizer_kwargs, model_kwargs={"attn_implementation": "eager"}
     )
     model: AttributionModel = cast(AttributionModel, torch.compile(model))
     register_step_function(unsupervised_qe_metrics_fn, "unsupervised_qe_metrics_fn", overwrite=True)  # type: ignore
     for src_texts, mt_texts, lang in tqdm(get_src_mt_texts(cfg.dataset_name, langs=cfg.langs)):
-        if cfg.end_idx is None:
-            cfg.end_idx = len(src_texts)
-        if cfg.start_idx >= cfg.end_idx or cfg.start_idx < 0 or cfg.end_idx > len(src_texts):
-            raise ValueError(
-                f"Invalid start or end index: start_idx={cfg.start_idx}, end_idx={cfg.end_idx}, "
-                f"length of texts={len(src_texts)}"
-            )
-        sources = src_texts[cfg.start_idx : cfg.end_idx]
-        targets = mt_texts[cfg.start_idx : cfg.end_idx]
-        print(f"Processing {lang} ({len(sources)} entries)...")
         out_dicts = []
         curr_fname = Path(cfg.output_dir) / f"{cfg.dataset_name}_unsupervised_metrics_{lang}.json"
         curr_fname.parent.mkdir(parents=True, exist_ok=True)
         if curr_fname.exists():
             with open(curr_fname) as f:
                 out_dicts = json.load(f)["data"]
+        start_idx = len(out_dicts)
+        sources = src_texts[start_idx:]
+        targets = mt_texts[start_idx:]
+        print(f"Processing {lang} ({len(sources)} entries)...")
         for src, mt in tqdm(zip(sources, targets, strict=True), desc="Processing entries", total=len(sources)):
             # Compute metrics
             out = model.attribute(src, mt, step_scores=["unsupervised_qe_metrics_fn"], show_progress=False)[0]
@@ -129,8 +117,6 @@ if __name__ == "__main__":
     parser.add_argument("--src_lang", type=str, help="Source language", default=None)
     parser.add_argument("--tgt_lang", type=str, help="Target language", default=None)
     parser.add_argument("--output_dir", type=str, help="Output directory", default="outputs")
-    parser.add_argument("--start_idx", type=int, help="Start index for processing", default=None)
-    parser.add_argument("--end_idx", type=int, help="End index for processing", default=None)
     args = parser.parse_args()
     cfg = Config.from_args(args)
     main(cfg)
