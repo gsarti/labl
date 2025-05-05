@@ -1,3 +1,4 @@
+import argparse
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -13,28 +14,56 @@ from unsup_wqe import get_metric_names, get_src_mt_texts, unsupervised_qe_metric
 
 @dataclass
 class Config:
-    model_id: str = "facebook/nllb-200-3.3B"
-    tokenizer_kwargs: dict[str, Any] = field(
-        default_factory=lambda: {
-            "src_lang": "eng_Latn",
-            "tgt_lang": "ita_Latn",
-        }
-    )
-    dataset_name: Literal["qe4pe", "divemt", "wmt24esa"] = "qe4pe"
-    langs: str | list[str] | None = "ita"
+    model_id: str
+    dataset_name: Literal["qe4pe", "divemt", "wmt24esa"]
+    langs: str | list[str] | None
     output_dir: str = "outputs"
+    tokenizer_kwargs: dict[str, Any] = field(default_factory=dict)
+    start_idx: int | None = None
+    end_idx: int | None = None
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> "Config":
+        cfg = cls(
+            model_id=args.model_id,
+            dataset_name=args.dataset_name,
+            langs=args.langs,
+            output_dir=args.output_dir,
+            start_idx=args.start_idx,
+            end_idx=args.end_idx,
+        )
+        if args.src_lang is not None and args.tgt_lang is not None:
+            cfg.tokenizer_kwargs = {
+                "src_lang": args.src_lang,
+                "tgt_lang": args.tgt_lang,
+            }
+        return cfg
 
 
 def main(cfg: Config) -> None:
+    if cfg.start_idx is None:
+        cfg.start_idx = 0
     model = load_model(cfg.model_id, "dummy", tokenizer_kwargs=cfg.tokenizer_kwargs)
     model: AttributionModel = cast(AttributionModel, torch.compile(model))
     register_step_function(unsupervised_qe_metrics_fn, "unsupervised_qe_metrics_fn", overwrite=True)  # type: ignore
     for src_texts, mt_texts, lang in tqdm(get_src_mt_texts(cfg.dataset_name, langs=cfg.langs)):
-        print(f"Processing {lang} ({len(src_texts)} entries)...")
+        if cfg.end_idx is None:
+            cfg.end_idx = len(src_texts)
+        if cfg.start_idx >= cfg.end_idx or cfg.start_idx < 0 or cfg.end_idx > len(src_texts):
+            raise ValueError(
+                f"Invalid start or end index: start_idx={cfg.start_idx}, end_idx={cfg.end_idx}, "
+                f"length of texts={len(src_texts)}"
+            )
+        sources = src_texts[cfg.start_idx : cfg.end_idx]
+        targets = mt_texts[cfg.start_idx : cfg.end_idx]
+        print(f"Processing {lang} ({len(sources)} entries)...")
         out_dicts = []
         curr_fname = Path(cfg.output_dir) / f"{cfg.dataset_name}_unsupervised_metrics_{lang}.json"
         curr_fname.parent.mkdir(parents=True, exist_ok=True)
-        for src, mt in zip(src_texts, mt_texts, strict=True):
+        if curr_fname.exists():
+            with open(curr_fname) as f:
+                out_dicts = json.load(f)["data"]
+        for src, mt in tqdm(zip(sources, targets, strict=True), desc="Processing entries", total=len(sources)):
             # Compute metrics
             out = model.attribute(src, mt, step_scores=["unsupervised_qe_metrics_fn"], show_progress=False)[0]
             mt_tokens = [t.token for t in out.target[1:]]
@@ -91,5 +120,15 @@ def main(cfg: Config) -> None:
 
 
 if __name__ == "__main__":
-    cfg = Config()
+    parser = argparse.ArgumentParser(description="Compute unsupervised metrics")
+    parser.add_argument("--model_id", type=str, help="Model ID")
+    parser.add_argument("--dataset_name", type=str, choices=["qe4pe", "divemt", "wmt24esa"], help="Dataset name")
+    parser.add_argument("--langs", type=str, nargs="+", help="Languages to process")
+    parser.add_argument("--src_lang", type=str, help="Source language", default=None)
+    parser.add_argument("--tgt_lang", type=str, help="Target language", default=None)
+    parser.add_argument("--output_dir", type=str, help="Output directory", default="outputs")
+    parser.add_argument("--start_idx", type=int, help="Start index for processing", default=None)
+    parser.add_argument("--end_idx", type=int, help="End index for processing", default=None)
+    args = parser.parse_args()
+    cfg = Config.from_args(args)
     main(cfg)
