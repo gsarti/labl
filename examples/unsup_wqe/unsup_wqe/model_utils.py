@@ -6,6 +6,7 @@ from torch.autograd import grad
 from transformers.modeling_outputs import CausalLMOutput, Seq2SeqLMOutput
 from transformers.models.m2m_100 import M2M100ForConditionalGeneration
 from transformers.models.marian import MarianMTModel
+from transformers.models.mbart import MBartForConditionalGeneration
 
 
 def get_rank(logits, target_indices):
@@ -18,6 +19,8 @@ def logit_lens(model, token_layer_act):
         return model.lm_head(model.model.decoder.layer_norm(token_layer_act))
     elif isinstance(model, MarianMTModel):
         return model.lm_head(token_layer_act)
+    elif isinstance(model, MBartForConditionalGeneration):
+        return model.lm_head(model.model.decoder.layer_norm(token_layer_act))
     else:
         raise NotImplementedError(f"Logit lens not implemented for model type {model.__class__.__name__}")
 
@@ -75,6 +78,8 @@ def get_decoder_states(output: Seq2SeqLMOutput | CausalLMOutput):
 def get_num_layers(model: AttributionModel) -> int:
     hf_model = model.model
     if isinstance(hf_model, M2M100ForConditionalGeneration):
+        return hf_model.config.num_hidden_layers
+    if isinstance(hf_model, MBartForConditionalGeneration):
         return hf_model.config.num_hidden_layers
     elif isinstance(hf_model, MarianMTModel):
         return hf_model.config.num_hidden_layers

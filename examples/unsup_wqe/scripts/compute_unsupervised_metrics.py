@@ -43,7 +43,9 @@ class Config:
 def main(cfg: Config) -> None:
     if cfg.start_idx is None:
         cfg.start_idx = 0
-    model = load_model(cfg.model_id, "dummy", tokenizer_kwargs=cfg.tokenizer_kwargs)
+    model = load_model(
+        cfg.model_id, "dummy", tokenizer_kwargs=cfg.tokenizer_kwargs, model_kwargs={"attn_implementation": "eager"}
+    )
     model: AttributionModel = cast(AttributionModel, torch.compile(model))
     register_step_function(unsupervised_qe_metrics_fn, "unsupervised_qe_metrics_fn", overwrite=True)  # type: ignore
     for src_texts, mt_texts, lang in tqdm(get_src_mt_texts(cfg.dataset_name, langs=cfg.langs)):
