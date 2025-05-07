@@ -1,7 +1,8 @@
-labl==0.1.1
+labl @ git+http://github.com/gsarti/labl.git@main
 inseq @ git+http://github.com/inseq-team/inseq.git@main
 unbabel-comet
 datasets
+scikit-learn
 jaxtyping
 ipykernel
 ipywidgets

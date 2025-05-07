@@ -5,11 +5,15 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import torch
-from inseq import AttributionModel, load_model, register_step_function
+from inseq import load_model, register_step_function
+from inseq.models import HuggingfaceModel
 from torch.distributions import Categorical
 from tqdm import tqdm
+from transformers.tokenization_utils import PreTrainedTokenizer
 
 from unsup_wqe import get_metric_names, get_src_mt_texts, unsupervised_qe_metrics_fn
+from unsup_wqe.model_utils import get_attributions, get_mt_tokens_and_metrics
+from unsup_wqe.prompt_utils import get_formatted_source_target_texts
 
 
 @dataclass
@@ -39,8 +43,8 @@ class Config:
 def main(cfg: Config) -> None:
     model = load_model(
         cfg.model_id, "dummy", tokenizer_kwargs=cfg.tokenizer_kwargs, model_kwargs={"attn_implementation": "eager"}
-    )
-    model: AttributionModel = cast(AttributionModel, torch.compile(model))
+    )  # type: ignore
+    model: HuggingfaceModel = cast(HuggingfaceModel, torch.compile(model))
     register_step_function(unsupervised_qe_metrics_fn, "unsupervised_qe_metrics_fn", overwrite=True)  # type: ignore
     for src_texts, mt_texts, lang in tqdm(get_src_mt_texts(cfg.dataset_name, langs=cfg.langs)):
         out_dicts = []
@@ -59,9 +63,11 @@ def main(cfg: Config) -> None:
         print(f"Processing {lang} ({len(sources)} entries)...")
         for src, mt in tqdm(zip(sources, targets, strict=True), desc="Processing entries", total=len(sources)):
             # Compute metrics
-            out = model.attribute(src, mt, step_scores=["unsupervised_qe_metrics_fn"], show_progress=False)[0]
-            mt_tokens = [t.token for t in out.target[1:]]
-            out_metrics = out.step_scores["unsupervised_qe_metrics_fn"]  # type: ignore
+            fmt_src, fmt_mt = get_formatted_source_target_texts(
+                src, mt, lang, cast(PreTrainedTokenizer, model.tokenizer), model.is_encoder_decoder
+            )
+            out = model.attribute(fmt_src, fmt_mt, step_scores=["unsupervised_qe_metrics_fn"], show_progress=False)[0]
+            mt_tokens, out_metrics = get_mt_tokens_and_metrics(out, model)
             metric_names = get_metric_names(model)
             assert len(metric_names) == out_metrics.shape[1], (
                 f"Expected {len(metric_names)} metrics, but got {out_metrics.shape[1]} instead."
@@ -69,21 +75,9 @@ def main(cfg: Config) -> None:
 
             # Add attention metrics
             out_attn = model.attribute(
-                src, mt, method="attention", attribute_target=model.is_encoder_decoder, show_progress=False
+                fmt_src, fmt_mt, method="attention", attribute_target=model.is_encoder_decoder, show_progress=False
             )[0]
-            if (
-                model.is_encoder_decoder
-                and isinstance(out_attn.source_attributions, torch.Tensor)
-                and isinstance(out_attn.target_attributions, torch.Tensor)
-            ):
-                attn_scores = (
-                    torch.cat([out_attn.source_attributions, out_attn.target_attributions], dim=0).permute(1, 0, 2, 3)
-                    / 2
-                )
-            elif out_attn.target_attributions is not None:
-                attn_scores = out_attn.target_attributions.permute(1, 0, 2, 3)
-            else:
-                raise ValueError("No attention scores found in the output.")
+            attn_scores = get_attributions(out_attn)
             attn_entropy_mean = []
             attn_entropy_max = []
             for gen_step in attn_scores:

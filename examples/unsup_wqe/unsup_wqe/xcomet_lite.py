@@ -7,7 +7,9 @@ from comet.encoders.bert import BERTEncoder
 from comet.models import XCOMETMetric
 from huggingface_hub import PyTorchModelHubMixin
 from torch import nn
-from transformers import AutoConfig, AutoModel, AutoTokenizer
+from transformers.models.auto.configuration_auto import AutoConfig
+from transformers.models.auto.modeling_auto import AutoModel
+from transformers.models.auto.tokenization_auto import AutoTokenizer
 from transformers.models.deberta_v2 import modeling_deberta_v2
 
 
