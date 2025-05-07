@@ -43,7 +43,7 @@ class Config:
 def main(cfg: Config) -> None:
     print("A")
     model = load_model(
-        cfg.model_id, "dummy", tokenizer_kwargs=cfg.tokenizer_kwargs, model_kwargs={"attn_implementation": "eager", "torch_dtype": torch.float8}
+        cfg.model_id, "dummy", tokenizer_kwargs=cfg.tokenizer_kwargs, model_kwargs={"attn_implementation": "eager", "torch_dtype": torch.float16}
     )  # type: ignore
     print("B")
     model: HuggingfaceModel = cast(HuggingfaceModel, torch.compile(model))
