@@ -17,7 +17,7 @@ class Config:
     model_id: Literal["myyycroft/XCOMET-lite", "Unbabel/XCOMET-XL", "Unbabel/XCOMET-XXL"]
     dataset_name: Literal["qe4pe", "divemt", "wmt24esa"]
     langs: str | list[str] | None
-    output_dir: str = "outputs"
+    output_dir: str = "outputs/metrics/{dataset_name}"
     batch_size: int = 1
 
     @classmethod
@@ -54,6 +54,8 @@ def main(cfg: Config) -> None:
     nickname = get_nick(cfg.model_id)
     for src_texts, mt_texts, lang in tqdm(get_src_mt_texts(cfg.dataset_name, langs=cfg.langs)):
         out_dicts = []
+        if "{dataset_name}" in cfg.output_dir:
+            cfg.output_dir = cfg.output_dir.format(dataset_name=cfg.dataset_name)
         curr_fname = Path(cfg.output_dir) / f"{cfg.dataset_name}_xcomet_{nickname}_{lang}.json"
         curr_fname.parent.mkdir(parents=True, exist_ok=True)
         if curr_fname.exists():
