@@ -1,15 +1,22 @@
+print("1")
 import argparse
 import json
+print("2")
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
+print("3")
 
 import torch
+print("4")
 from comet import download_model, load_from_checkpoint
+print("5")
 from tqdm import tqdm
 
+print("6")
 from unsup_wqe import get_src_mt_texts
 from unsup_wqe.xcomet_lite import XCOMETLiteMetric
+print("7")
 
 
 @dataclass
@@ -43,14 +50,20 @@ def get_nick(model_id: str) -> str:
 
 
 def main(cfg: Config) -> None:
+    print("A")
     if cfg.model_id in ["Unbabel/XCOMET-XL", "Unbabel/XCOMET-XXL"]:
+        print("B")
         model_path = download_model(cfg.model_id)
+        print("C")
         model = load_from_checkpoint(model_path)
+        print("D")
     else:
         model = XCOMETLiteMetric.from_pretrained(cfg.model_id)
+    print("E")
     model.eval()
     for param in model.parameters():
         param.requires_grad = False
+    print("F")
     nickname = get_nick(cfg.model_id)
     for src_texts, mt_texts, lang in tqdm(get_src_mt_texts(cfg.dataset_name, langs=cfg.langs)):
         out_dicts = []

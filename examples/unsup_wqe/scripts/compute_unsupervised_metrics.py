@@ -41,11 +41,15 @@ class Config:
 
 
 def main(cfg: Config) -> None:
+    print("A")
     model = load_model(
-        cfg.model_id, "dummy", tokenizer_kwargs=cfg.tokenizer_kwargs, model_kwargs={"attn_implementation": "eager"}
+        cfg.model_id, "dummy", tokenizer_kwargs=cfg.tokenizer_kwargs, model_kwargs={"attn_implementation": "eager", "torch_dtype": torch.float8}
     )  # type: ignore
+    print("B")
     model: HuggingfaceModel = cast(HuggingfaceModel, torch.compile(model))
+    print("C")
     register_step_function(unsupervised_qe_metrics_fn, "unsupervised_qe_metrics_fn", overwrite=True)  # type: ignore
+    print("D")
     for src_texts, mt_texts, lang in tqdm(get_src_mt_texts(cfg.dataset_name, langs=cfg.langs)):
         out_dicts = []
         if "{dataset_name}" in cfg.output_dir:

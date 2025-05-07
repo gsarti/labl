@@ -1,4 +1,4 @@
-labl @ git+http://github.com/gsarti/labl.git@main
+#labl @ git+http://github.com/gsarti/labl.git@main
 inseq @ git+http://github.com/inseq-team/inseq.git@main
 unbabel-comet
 datasets

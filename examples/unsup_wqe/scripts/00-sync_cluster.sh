@@ -1,0 +1,1 @@
+rsync -ra . euler:/cluster/work/sachan/vilem/labl
