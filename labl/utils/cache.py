@@ -2,6 +2,7 @@ import logging
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
+import hashlib
 
 import requests
 from transformers.utils.import_utils import is_pandas_available
@@ -37,7 +38,7 @@ def load_cached_or_download(
     import pandas as pd
 
     cache_folder = Path(cache_path)
-    cache_file = cache_folder / os.path.basename(url)
+    cache_file = cache_folder / (hashlib.md5(url.encode("utf8")).hexdigest() + "---" + os.path.basename(url))
     if not cache_file.exists():
         logging.info(f"Cache file '{cache_file}' not found. Downloading from {url}...")
         # If the file doesn't exist, download it
