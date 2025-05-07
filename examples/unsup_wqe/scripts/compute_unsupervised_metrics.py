@@ -17,7 +17,7 @@ class Config:
     model_id: str
     dataset_name: Literal["qe4pe", "divemt", "wmt24esa"]
     langs: str | list[str] | None
-    output_dir: str = "outputs"
+    output_dir: str = "outputs/metrics/{dataset_name}"
     tokenizer_kwargs: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -44,6 +44,8 @@ def main(cfg: Config) -> None:
     register_step_function(unsupervised_qe_metrics_fn, "unsupervised_qe_metrics_fn", overwrite=True)  # type: ignore
     for src_texts, mt_texts, lang in tqdm(get_src_mt_texts(cfg.dataset_name, langs=cfg.langs)):
         out_dicts = []
+        if "{dataset_name}" in cfg.output_dir:
+            cfg.output_dir = cfg.output_dir.format(dataset_name=cfg.dataset_name)
         curr_fname = Path(cfg.output_dir) / f"{cfg.dataset_name}_unsupervised_metrics_{lang}.json"
         curr_fname.parent.mkdir(parents=True, exist_ok=True)
         if curr_fname.exists():

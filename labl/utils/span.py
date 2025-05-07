@@ -29,7 +29,7 @@ class Span:
 
     @classmethod
     def from_dict(cls, data: dict) -> "Span":
-        return cls(**data)
+        return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
     @classmethod
     def from_list(cls, data: "Sequence[Span | dict]") -> "SpanList":

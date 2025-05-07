@@ -85,6 +85,7 @@ class BaseLabeledSequence(LabeledInterface, list[LabeledObject], ABC):
         """
         for entry in self:
             entry.relabel(relabel_fn=relabel_fn, relabel_map=relabel_map)
+        self._label_types = self._get_label_types()
 
     ### Helper Functions ###
 
@@ -200,7 +201,7 @@ class BaseLabeledDataset(BaseLabeledSequence[EntryType | BaseMultiLabelEntry[Ent
         is_multiedit_only = all(isinstance(entry, BaseMultiLabelEntry) for entry in self)
         is_single_edit_only = all(isinstance(entry, BaseLabeledEntry) for entry in self)
         if is_multiedit_only:
-            return np.concat(
+            return np.concatenate(
                 [entry._get_labels_array(dtype) for entry in cast(list[BaseMultiLabelEntry], self)], axis=1
             )
         elif is_single_edit_only:
@@ -215,7 +216,14 @@ class BaseLabeledDataset(BaseLabeledSequence[EntryType | BaseMultiLabelEntry[Ent
             self_entries = cast(list[BaseLabeledEntry], self)
             other_entries = cast(list[BaseLabeledEntry], other)
             if not all(s.get_tokens() == o.get_tokens() for s, o in zip(self_entries, other_entries, strict=True)):
-                raise RuntimeError("Tokens of all `self` and `other` entries must be the same to extract labels. ")
+                different_tokens = []
+                for self_entry, other_entry in zip(self_entries, other_entries, strict=True):
+                    if self_entry.get_tokens() != other_entry.get_tokens():
+                        different_tokens.append((self_entry.get_tokens(), other_entry.get_tokens()))
+                raise RuntimeError(
+                    "Tokens of all `self` and `other` entries must be the same to extract labels.\n"
+                    + "\n".join([f"Self: {s}\nOther: {o}" for s, o in different_tokens])
+                )
             return np.concatenate(
                 [
                     self_entry._get_labels_array([self_entry, other_entry], dtype).astype(self.label_types[0])

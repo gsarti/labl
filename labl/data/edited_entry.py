@@ -224,6 +224,12 @@ class EditedEntry(BaseLabeledEntry):
                 f"The number of edits ({len(edits)}) does not match the number of info dictionaries ({len(info)})."
             )
         tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
+        if tokenizer.has_eos_token:
+            if not keep_final_gap:
+                logger.warning(
+                    "The tokenizer has an EOS token, but `keep_final_gap` is set to False. The EOS token will be kept."
+                )
+            keep_final_gap = True
         tokens, offsets = tokenizer.tokenize_with_offsets(text)
         tokens_with_gaps, offsets_with_gaps = tokenizer._add_gaps_to_tokens_and_offsets(tokens, offsets, gap_token)
         tokens, offsets = tokens[0], offsets[0]
@@ -267,12 +273,6 @@ class EditedEntry(BaseLabeledEntry):
                 out_edit_offsets = e_offsets_with_gaps
             else:
                 # If an ad-hoc EOS is added, it is always kept
-                if tokenizer.has_eos_token:
-                    if not keep_final_gap:
-                        raise RuntimeError(
-                            "The tokenizer has an EOS token, but `keep_final_gap` is set to False."
-                            "The EOS token will be kept."
-                        )
                 tokens_labels = tokenizer._merge_gap_annotations(
                     [tokens_labels], has_bos_token=tokenizer.has_bos_token, keep_final_gap=keep_final_gap
                 )[0]
@@ -283,7 +283,7 @@ class EditedEntry(BaseLabeledEntry):
                 # If gaps are merged, the last gap is kept regardless of it being a gap or not to mark end-insertions.
                 # If the tokenizer did not have an EOS token for that, the sequence will have an extra token and offsets
                 # will need to be adjusted.
-                if not keep_final_gap:
+                if not keep_final_gap or tokenizer.has_eos_token:
                     out_tokens, out_offsets = tokens, offsets
                     out_edit_tokens, out_edit_offsets = e_tokens, e_offsets
                 else:
