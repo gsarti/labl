@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, cast
 
+import numpy as np
 from sklearn.metrics import auc, average_precision_score, precision_recall_curve
 
 from labl.data.base_sequence import BaseMultiLabelEntry
@@ -99,6 +100,12 @@ def main(cfg: Config) -> None:
                     except (RuntimeError, ValueError) as e:
                         raise RuntimeError(f"Error computing scores for {metric}") from e
                     out_metric_scores[lang][metric][ann_idx] = {"ap": ap, "auprc": auprc}
+                out_metric_scores[lang][metric]["mean"] = {
+                    "ap": sum([out_metric_scores[lang][metric][i]["ap"] for i in range(num_annotators)])
+                    / num_annotators,
+                    "auprc": sum([out_metric_scores[lang][metric][i]["auprc"] for i in range(num_annotators)])
+                    / num_annotators,
+                }
             else:
                 if isinstance(data, EditedDataset):
                     curr_annotator_data = LabeledDataset([cast(EditedEntry, e).orig for e in data])
@@ -115,6 +122,103 @@ def main(cfg: Config) -> None:
                 except (RuntimeError, ValueError) as e:
                     raise RuntimeError(f"Error computing scores for {metric}") from e
                 out_metric_scores[lang][metric] = {"ap": ap, "auprc": auprc}
+                num_baselines = 10
+                out_metric_scores[lang]["random_baseline"] = {"ap": [], "auprc": []}
+                for idx in range(num_baselines):
+                    labels_array = copy_annotator_data._get_labels_array(float, copy_annotator_data)
+                    random_array, annotator_array = labels_array[0], labels_array[1]
+                    random_array = np.random.randn(len(random_array))
+                    precision, recall, _ = precision_recall_curve(annotator_array, random_array)
+                    auprc = auc(recall, precision)
+                    ap = average_precision_score(annotator_array, random_array)
+                    out_metric_scores[lang]["random_baseline"]["ap"].append(ap)
+                    out_metric_scores[lang]["random_baseline"]["auprc"].append(auprc)
+                out_metric_scores[lang]["random_baseline"] = {
+                    "ap": sum(out_metric_scores[lang]["random_baseline"]["ap"]) / num_baselines,
+                    "auprc": sum(out_metric_scores[lang]["random_baseline"]["auprc"]) / num_baselines,
+                }
+        if isinstance(data[0], BaseMultiLabelEntry):
+            entry = cast(BaseMultiLabelEntry, data[0])
+            num_annotators = len(entry)
+            out_metric_scores[lang]["human_annotators_mean"] = {}
+            out_metric_scores[lang]["human_annotators_max"] = {}
+            out_metric_scores[lang]["random_baseline"] = {}
+            for ann_idx in range(num_annotators):
+                out_metric_scores[lang]["human_annotators_mean"][ann_idx] = {"ap": [], "auprc": []}
+                out_metric_scores[lang]["random_baseline"][ann_idx] = {"ap": [], "auprc": []}
+                other_ann_idx = [i for i in range(num_annotators) if i != ann_idx]
+                num_other_ann = len(other_ann_idx)
+                if isinstance(entry, MultiEditEntry):
+                    curr_annotator_data = LabeledDataset([cast(MultiEditEntry, e)[ann_idx].orig for e in data])
+                elif isinstance(entry, MultiLabelEntry):
+                    curr_annotator_data = LabeledDataset([cast(MultiLabelEntry, e)[ann_idx] for e in data])
+                else:
+                    raise TypeError(f"Unsupported entry type: {type(entry)}")
+                copy_annotator_data = deepcopy(curr_annotator_data)
+                copy_annotator_data.relabel(lambda lab: 1.0 if lab is not None else 0.0)
+                for other_idx in other_ann_idx:
+                    if isinstance(entry, MultiEditEntry):
+                        other_annotator_data = LabeledDataset([cast(MultiEditEntry, e)[other_idx].orig for e in data])
+                    elif isinstance(entry, MultiLabelEntry):
+                        other_annotator_data = LabeledDataset([cast(MultiLabelEntry, e)[other_idx] for e in data])
+                    else:
+                        raise TypeError(f"Unsupported entry type: {type(entry)}")
+                    copy_other_annotator_data = deepcopy(other_annotator_data)
+                    copy_other_annotator_data.relabel(lambda lab: 1.0 if lab is not None else 0.0)
+                    try:
+                        labels_array = copy_other_annotator_data._get_labels_array(float, copy_annotator_data)
+                        other_annotator_array, curr_annotator_array = labels_array[0], labels_array[1]
+                        precision, recall, _ = precision_recall_curve(curr_annotator_array, other_annotator_array)
+                        auprc = auc(recall, precision)
+                        ap = average_precision_score(curr_annotator_array, other_annotator_array)
+                    except (RuntimeError, ValueError) as e:
+                        raise RuntimeError(f"Error computing scores for annotator pair {ann_idx}, {other_idx}") from e
+                    out_metric_scores[lang]["human_annotators_mean"][ann_idx]["ap"].append(ap)
+                    out_metric_scores[lang]["human_annotators_mean"][ann_idx]["auprc"].append(auprc)
+                num_baselines = 10
+                for idx in range(num_baselines):
+                    labels_array = copy_annotator_data._get_labels_array(float, copy_annotator_data)
+                    random_array, curr_annotator_array = labels_array[0], labels_array[1]
+                    random_array = np.random.randn(len(random_array))
+                    precision, recall, _ = precision_recall_curve(curr_annotator_array, random_array)
+                    auprc = auc(recall, precision)
+                    ap = average_precision_score(curr_annotator_array, random_array)
+                    out_metric_scores[lang]["random_baseline"][ann_idx]["ap"].append(ap)
+                    out_metric_scores[lang]["random_baseline"][ann_idx]["auprc"].append(auprc)
+                out_metric_scores[lang]["human_annotators_max"][ann_idx] = {
+                    "ap": max(out_metric_scores[lang]["human_annotators_mean"][ann_idx]["ap"]),
+                    "auprc": max(out_metric_scores[lang]["human_annotators_mean"][ann_idx]["auprc"]),
+                }
+                out_metric_scores[lang]["human_annotators_mean"][ann_idx] = {
+                    "ap": sum(out_metric_scores[lang]["human_annotators_mean"][ann_idx]["ap"]) / num_other_ann,
+                    "auprc": sum(out_metric_scores[lang]["human_annotators_mean"][ann_idx]["auprc"]) / num_other_ann,
+                }
+                out_metric_scores[lang]["random_baseline"][ann_idx] = {
+                    "ap": sum(out_metric_scores[lang]["random_baseline"][ann_idx]["ap"]) / num_baselines,
+                    "auprc": sum(out_metric_scores[lang]["random_baseline"][ann_idx]["auprc"]) / num_baselines,
+                }
+            out_metric_scores[lang]["human_annotators_mean"]["mean"] = {
+                "ap": sum([out_metric_scores[lang]["human_annotators_mean"][i]["ap"] for i in range(num_annotators)])
+                / num_annotators,
+                "auprc": sum(
+                    [out_metric_scores[lang]["human_annotators_mean"][i]["auprc"] for i in range(num_annotators)]
+                )
+                / num_annotators,
+            }
+            out_metric_scores[lang]["human_annotators_max"]["mean"] = {
+                "ap": sum([out_metric_scores[lang]["human_annotators_max"][i]["ap"] for i in range(num_annotators)])
+                / num_annotators,
+                "auprc": sum(
+                    [out_metric_scores[lang]["human_annotators_max"][i]["auprc"] for i in range(num_annotators)]
+                )
+                / num_annotators,
+            }
+            out_metric_scores[lang]["random_baseline"]["mean"] = {
+                "ap": sum([out_metric_scores[lang]["random_baseline"][i]["ap"] for i in range(num_annotators)])
+                / num_annotators,
+                "auprc": sum([out_metric_scores[lang]["random_baseline"][i]["auprc"] for i in range(num_annotators)])
+                / num_annotators,
+            }
         with open(Path(cfg.outputs_dir) / cfg.output_fname.format(dataset_name=cfg.dataset_name), "w") as f:
             json.dump(out_metric_scores, f, indent=4, ensure_ascii=False)
 
@@ -135,7 +239,7 @@ if __name__ == "__main__":
         "--outputs_dir",
         type=str,
         help="Output directory for the results",
-        default="outputs",
+        default="outputs/results/{dataset_name}",
     )
     parser.add_argument(
         "--output_fname",

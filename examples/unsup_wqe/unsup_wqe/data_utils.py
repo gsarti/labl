@@ -100,13 +100,15 @@ def build_metrics_dataset(
     unsup_metrics_fname: str | Path,
     sup_metrics_fnames: list[str] | list[Path],
     tokenizer: Tokenizer | None = None,
+    reverse_sign_match: list[str] = ["logprob", "mcd_logprob_mean"],
+    reverse_sign_startswith: list[str] = ["logit_lens_logprob_layer"],
 ) -> dict[str, LabeledDataset]:
     """Builds a dictionary of metrics datasets from the given filenames"""
     # Build metrics labeled datasets
     with open(unsup_metrics_fname) as f:
         data = json.load(f)["data"]
     metrics_datasets: dict[str, LabeledDataset] = {}
-    unsupervised_metrics = [k for k in data[0].keys() if k not in ["src", "mt", "mt_tokens"]]
+    unsupervised_metrics: list[str] = [k for k in data[0].keys() if k not in ["src", "mt", "mt_tokens"]]
     for metric in tqdm(unsupervised_metrics, desc="Loading unsup. metrics", total=len(unsupervised_metrics)):
         metrics_datasets[metric] = LabeledDataset.from_tokens(
             texts=[entry["mt"] for entry in data],
@@ -115,6 +117,8 @@ def build_metrics_dataset(
             tokenizer=tokenizer,
             show_progress=False,
         )
+        if metric in reverse_sign_match or metric.startswith(tuple(reverse_sign_startswith)):
+            metrics_datasets[metric].relabel(lambda label: -label if isinstance(label, float | int) else label)
     for fname in sup_metrics_fnames:
         with open(fname) as f:
             data = json.load(f)["data"]
