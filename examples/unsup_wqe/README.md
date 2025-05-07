@@ -13,6 +13,7 @@ source .venv/bin/activate
 
 # Install the required packages
 uv pip install -r requirements.txt
+cd ../..
 uv pip install -e .
 ```
 
