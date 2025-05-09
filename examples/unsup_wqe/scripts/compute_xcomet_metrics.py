@@ -9,6 +9,7 @@ from comet import download_model, load_from_checkpoint
 from tqdm import tqdm
 
 from unsup_wqe import get_src_mt_texts
+from unsup_wqe.xcomet_continuous import XCOMETContinuousMetric
 from unsup_wqe.xcomet_lite import XCOMETLiteMetric
 
 
@@ -19,6 +20,7 @@ class Config:
     langs: str | list[str] | None
     output_dir: str = "outputs/metrics/{dataset_name}"
     batch_size: int = 1
+    do_continuous: bool = False
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> "Config":
@@ -27,23 +29,32 @@ class Config:
             dataset_name=args.dataset_name,
             langs=args.langs,
             output_dir=args.output_dir,
+            batch_size=args.batch_size,
+            do_continuous=args.do_continuous,
         )
         return cfg
 
 
-def get_nick(model_id: str) -> str:
+def get_nick(model_id: str, do_continuous: bool) -> str:
     if model_id == "myyycroft/XCOMET-lite":
-        return "lite"
+        nick = "lite"
     elif model_id == "Unbabel/XCOMET-XL":
-        return "xl"
+        nick = "xl"
     elif model_id == "Unbabel/XCOMET-XXL":
-        return "xxl"
+        nick = "xxl"
     else:
         raise ValueError(f"Unknown model ID: {model_id}")
+    if do_continuous:
+        nick += "_cont"
+    return nick
 
 
 def main(cfg: Config) -> None:
     if cfg.model_id in ["Unbabel/XCOMET-XL", "Unbabel/XCOMET-XXL"]:
+        if cfg.do_continuous:
+            from comet.models import str2model
+
+            str2model["xcomet_metric"] = XCOMETContinuousMetric
         model_path = download_model(cfg.model_id)
         model = load_from_checkpoint(model_path)
     else:
@@ -51,7 +62,7 @@ def main(cfg: Config) -> None:
     model.eval()
     for param in model.parameters():
         param.requires_grad = False
-    nickname = get_nick(cfg.model_id)
+    nickname = get_nick(cfg.model_id, cfg.do_continuous)
     for src_texts, mt_texts, lang in tqdm(get_src_mt_texts(cfg.dataset_name, langs=cfg.langs)):
         out_dicts = []
         if "{dataset_name}" in cfg.output_dir:
@@ -74,23 +85,45 @@ def main(cfg: Config) -> None:
             accelerator="auto",
             gpus=0 if not torch.cuda.is_available() else 1,
         )
-        for src, mt, sent_score, error_spans in zip(
-            sources,
-            targets,
-            out.scores,  # type: ignore
-            out.metadata.error_spans,  # type: ignore
-            strict=True,
-        ):
-            data = {
-                "src": src,
-                "mt": mt,
-                "sent_score": sent_score,
-                "error_spans": [
-                    {"start": s["start"], "end": s["end"], "label": s["severity"], "confidence": s["confidence"]}
-                    for s in error_spans
-                ],
-            }
-            out_dicts.append(data)
+        if not cfg.do_continuous:
+            for src, mt, sent_score, error_spans in zip(
+                sources,
+                targets,
+                out.scores,  # type: ignore
+                out.metadata.error_spans,  # type: ignore
+                strict=True,
+            ):
+                data = {
+                    "src": src,
+                    "mt": mt,
+                    "sent_score": sent_score,
+                    "error_spans": [
+                        {"start": s["start"], "end": s["end"], "label": s["severity"], "confidence": s["confidence"]}
+                        for s in error_spans
+                    ],
+                }
+                out_dicts.append(data)
+        else:
+            for src, mt, mt_tokens, no_error_probs, minor_error_probs, major_error_probs, critical_error_probs in zip(
+                sources,
+                targets,
+                out.metadata.tokens,  # type: ignore
+                out.metadata.no_error_probs,  # type: ignore
+                out.metadata.minor_error_probs,  # type: ignore
+                out.metadata.major_error_probs,  # type: ignore
+                out.metadata.critical_error_probs,  # type: ignore
+                strict=True,
+            ):
+                data = {
+                    "src": src,
+                    "mt": mt,
+                    "mt_tokens": mt_tokens,
+                    "no_error_probs": no_error_probs,
+                    "minor_error_probs": minor_error_probs,
+                    "major_error_probs": major_error_probs,
+                    "critical_error_probs": critical_error_probs,
+                }
+                out_dicts.append(data)
         with open(curr_fname, "w") as f:
             json.dump({"data": out_dicts}, f, indent=4, ensure_ascii=False)
 
@@ -102,6 +135,7 @@ if __name__ == "__main__":
     parser.add_argument("--langs", type=str, nargs="+", help="Languages to process")
     parser.add_argument("--output_dir", type=str, help="Output directory", default="outputs")
     parser.add_argument("--batch_size", type=int, help="Batch size for processing", default=1)
+    parser.add_argument("--do_continuous", action="store_true", help="Use continuous model")
     args = parser.parse_args()
     cfg = Config.from_args(args)
     main(cfg)
