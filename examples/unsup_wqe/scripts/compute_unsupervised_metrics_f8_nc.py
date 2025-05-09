@@ -46,11 +46,15 @@ def main(cfg: Config) -> None:
         cfg.model_id,
         "dummy",
         tokenizer_kwargs=cfg.tokenizer_kwargs,
-        model_kwargs={"attn_implementation": "eager", "torch_dtype": torch.bfloat16},
+        model_kwargs={
+            "attn_implementation": "eager",
+            "load_in_8bit": True,
+            "bnb_4bit_compute_dtype": torch.float16,
+            "device_map": "auto"
+        }
     )  # type: ignore
     
     print("B")
-    # model: HuggingfaceModel = cast(HuggingfaceModel, torch.compile(model))
     model: HuggingfaceModel = cast(HuggingfaceModel, model)
     print("Model in eval mode:", not model.model.training)
     print("C")

@@ -26,6 +26,7 @@ def unsupervised_qe_metrics_fn(
         output_hidden_states=True,
         output_attentions=True,
     )
+    print("Step 1")
     all_layer_states = get_decoder_states(forward_output)
     out_logits = args.attribution_model.output2logits(args.forward_output)
     output_logprobs = F.log_softmax(out_logits, dim=-1)
@@ -39,6 +40,7 @@ def unsupervised_qe_metrics_fn(
     logit_lens_prediction_ranks = []
     num_layers = len(all_layer_states)
     for layer_idx, layer_states in enumerate(all_layer_states):
+        print("Step 3")
         # logit_lens_logprob
         ll_logits = logit_lens(args.attribution_model.model, layer_states[:, -1, :])
         ll_entropy = Categorical(logits=ll_logits).entropy().item()
@@ -63,14 +65,16 @@ def unsupervised_qe_metrics_fn(
             blood_per_layer.append(blood_score.item())
 
     # mcd_logprob_avg and mcd_logprob_var
-    mcd_logprobs = get_mcd_probs(args, mcd_n_steps, logprob=mcd_logprob)
-    mcd_logprob_avg = mcd_logprobs.mean().item()
-    mcd_logprob_var = mcd_logprobs.var().item()
+    # mcd_logprobs = get_mcd_probs(args, mcd_n_steps, logprob=mcd_logprob)
+    # mcd_logprob_avg = mcd_logprobs.mean().item()
+    # mcd_logprob_var = mcd_logprobs.var().item()
 
+    print("Step 4")
     # logit_lens_rank
     logit_lens_rank = logit_lens_prediction_ranks.index(0) if 0 in logit_lens_prediction_ranks else num_layers
 
     # logprobs_entropy
+    print("Step 5")
     logprobs_entropy = Categorical(logits=output_logprobs.detach().clone().requires_grad_(False)).entropy().item()
 
     # logit_lens_logprob_variation
@@ -78,6 +82,7 @@ def unsupervised_qe_metrics_fn(
 
     # logit_lens_kl_div_variation
     logit_lens_kl_div_variation = Categorical(logits=torch.tensor(ll_kl_div_per_layer)).entropy().item()
+    print("Step 6")
     return torch.tensor(
         [
             ll_logprob_per_layer
@@ -86,8 +91,8 @@ def unsupervised_qe_metrics_fn(
             + blood_per_layer
             + [
                 logprob,
-                mcd_logprob_avg,
-                mcd_logprob_var,
+                0,
+                0,
                 logit_lens_rank,
                 logprobs_entropy,
                 logit_lens_logprob_variation,
