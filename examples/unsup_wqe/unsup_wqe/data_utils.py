@@ -151,33 +151,46 @@ def build_metrics_dataset(
             metric_name = metric_name.replace(f"{dataset_name}_", "", 1)
         if lang is not None:
             metric_name = metric_name.replace(f"_{lang}", "", 1)
-        entry_dataset = LabeledDataset.from_spans(
-            texts=[entry["mt"] for entry in data],
-            spans=[entry["error_spans"] for entry in data],
-            tokenizer=tokenizer,
-            show_progress=False,
-        )
-        entry_dataset_binary = deepcopy(entry_dataset)
-        entry_dataset_binary.relabel(lambda label: 0 if label is None else 1)
-        metrics_datasets[f"{metric_name}_binary"] = entry_dataset_binary
-        entry_dataset_confidence = LabeledDataset.from_spans(
-            texts=[entry["mt"] for entry in data],
-            spans=[
-                [
-                    {
-                        "start": s["start"],
-                        "end": s["end"],
-                        "label": s["confidence"] * (2 if s["label"] == "major" else 1),
-                    }
-                    for s in entry["error_spans"]
-                ]
-                for entry in data
-            ],
-            tokenizer=tokenizer,
-            show_progress=False,
-        )
-        entry_dataset_confidence.relabel(lambda label: 0.0 if label is None else label)
-        metrics_datasets[f"{metric_name}_confidence"] = entry_dataset_confidence
+        # Binary metric
+        if "error_spans" in data[0]:
+            entry_dataset = LabeledDataset.from_spans(
+                texts=[entry["mt"] for entry in data],
+                spans=[entry["error_spans"] for entry in data],
+                tokenizer=tokenizer,
+                show_progress=False,
+            )
+            entry_dataset_binary = deepcopy(entry_dataset)
+            entry_dataset_binary.relabel(lambda label: 0 if label is None else 1)
+            metrics_datasets[metric_name] = entry_dataset_binary
+        # Continuous metric
+        else:
+            if "xcomet_xl_cont" in metric_name:
+                xcomet_tokenizer = get_tokenizer("facebook/xlm-roberta-xl")
+            elif "xcomet_xxl_cont" in metric_name:
+                xcomet_tokenizer = get_tokenizer("facebook/xlm-roberta-xxl")
+            else:
+                raise ValueError(f"Unknown continuous metric: {metric_name}")
+            entry_dataset = LabeledDataset.from_tokens(
+                texts=[entry["mt"] for entry in data],
+                tokens=[entry["mt_tokens"][1:-1] for entry in data],
+                labels=[
+                    [
+                        min + maj + crit
+                        for min, maj, crit in zip(
+                            entry["minor_error_probs"][1:-1],
+                            entry["major_error_probs"][1:-1],
+                            entry["critical_error_probs"][1:-1],
+                            strict=True,
+                        )
+                    ]
+                    for entry in data
+                ],
+                tokenizer=xcomet_tokenizer,
+            )
+            entry_dataset.retokenize(tokenizer, label_aggregation_fn=lambda labels: labels[0])
+            entry_dataset.relabel(lambda label: 0.0 if label is None else label)
+            metrics_datasets[metric_name] = entry_dataset
+
     return metrics_datasets
 
 
