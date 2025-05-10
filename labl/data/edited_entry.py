@@ -12,6 +12,7 @@ from transformers.tokenization_utils_fast import PreTrainedTokenizerFast
 from labl.data.base_entry import BaseLabeledEntry
 from labl.data.base_sequence import BaseMultiLabelEntry
 from labl.data.labeled_entry import LabeledEntry
+from labl.utils.aggregation import LabelAggregation, label_sum_aggregation
 from labl.utils.jiwer_ext import process_words
 from labl.utils.tokenizer import Tokenizer, WhitespaceTokenizer, get_tokenizer
 from labl.utils.typing import EditedEntryDictType, InfoDictType, LabelType, OffsetType
@@ -450,6 +451,27 @@ class EditedEntry(BaseLabeledEntry):
             constructor_key=cls.__constructor_key,
         )
 
+    def retokenize(
+        self,
+        tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
+        tokenizer_kwargs: dict = {},
+        label_aggregation_fn: LabelAggregation = label_sum_aggregation,
+    ):
+        """Retokenize the `EditedEntry` using the provided tokenizer.
+
+        Args:
+            tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A `Tokenizer`
+                used for tokenization. Supports initialization from a `transformers.PreTrainedTokenizer`, and uses
+                whitespace tokenization by default.
+            tokenizer_kwargs (dict): Additional arguments for the tokenizer.
+            label_aggregation_fn (LabelAggregation): A function to aggregate labels. Default: `label_sum_aggregation`.
+        """
+        tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
+        self._orig.retokenize(tokenizer, tokenizer_kwargs, label_aggregation_fn)
+        self._edit.retokenize(tokenizer, tokenizer_kwargs, label_aggregation_fn)
+        self._has_bos_token = tokenizer.has_bos_token
+        self._has_eos_token = tokenizer.has_eos_token
+
     def merge_gap_annotations(
         self,
         merge_fn: Callable[[Sequence[LabelType]], LabelType] | None = None,
@@ -585,6 +607,25 @@ class MultiEditEntry(BaseMultiLabelEntry[EditedEntry]):
         return out_str.strip()
 
     ### Utility Methods ###
+
+    def retokenize(
+        self,
+        tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
+        tokenizer_kwargs: dict = {},
+        label_aggregation_fn: LabelAggregation = label_sum_aggregation,
+    ):
+        """Retokenize the `MultiEditEntry` using the provided tokenizer.
+
+        Args:
+            tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A `Tokenizer`
+                used for tokenization. Supports initialization from a `transformers.PreTrainedTokenizer`, and uses
+                whitespace tokenization by default.
+            tokenizer_kwargs (dict): Additional arguments for the tokenizer.
+            label_aggregation_fn (LabelAggregation): A function used to aggregate labels.
+        """
+        tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
+        for entry in self:
+            entry.retokenize(tokenizer, tokenizer_kwargs, label_aggregation_fn=label_aggregation_fn)
 
     def merge_gap_annotations(
         self,

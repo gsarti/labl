@@ -6,12 +6,13 @@ from typing import Any, Literal, cast
 
 import torch
 from inseq import load_model, register_step_function
+from inseq.attr import FeatureAttribution
 from inseq.models import HuggingfaceModel
 from torch.distributions import Categorical
 from tqdm import tqdm
 from transformers.tokenization_utils import PreTrainedTokenizer
 
-from unsup_wqe import get_metric_names, get_src_mt_texts, unsupervised_qe_metrics_fn
+from unsup_wqe import get_metric_names, get_src_mt_texts, unsupervised_qe_metrics_fn, unsupervised_qe_metrics_light_fn
 from unsup_wqe.model_utils import get_attributions, get_mt_tokens_and_metrics
 from unsup_wqe.prompt_utils import get_formatted_source_target_texts
 
@@ -21,6 +22,7 @@ class Config:
     model_id: str
     dataset_name: Literal["qe4pe", "divemt", "wmt24esa"]
     langs: str | list[str] | None
+    use_heavy_function: bool = False
     output_dir: str = "outputs/metrics/{dataset_name}"
     tokenizer_kwargs: dict[str, Any] = field(default_factory=dict)
 
@@ -31,6 +33,7 @@ class Config:
             dataset_name=args.dataset_name,
             langs=args.langs,
             output_dir=args.output_dir,
+            use_heavy_function=args.use_heavy_function,
         )
         if args.src_lang is not None and args.tgt_lang is not None:
             cfg.tokenizer_kwargs = {
@@ -44,8 +47,17 @@ def main(cfg: Config) -> None:
     model = load_model(
         cfg.model_id, "dummy", tokenizer_kwargs=cfg.tokenizer_kwargs, model_kwargs={"attn_implementation": "eager"}
     )  # type: ignore
+    cast(FeatureAttribution, model.attribution_method).use_hidden_states = True
     model: HuggingfaceModel = cast(HuggingfaceModel, torch.compile(model))
-    register_step_function(unsupervised_qe_metrics_fn, "unsupervised_qe_metrics_fn", overwrite=True)  # type: ignore
+    metric_names = get_metric_names(model, is_heavy=cfg.use_heavy_function)
+    if cfg.use_heavy_function:
+        for param in model.parameters():
+            param.requires_grad = True
+        register_step_function(unsupervised_qe_metrics_fn, "unsupervised_qe_metrics_fn", overwrite=True)  # type: ignore
+    else:
+        for param in model.parameters():
+            param.requires_grad = False
+        register_step_function(unsupervised_qe_metrics_light_fn, "unsupervised_qe_metrics_fn", overwrite=True)  # type: ignore
     for src_texts, mt_texts, lang in tqdm(get_src_mt_texts(cfg.dataset_name, langs=cfg.langs)):
         out_dicts = []
         if "{dataset_name}" in cfg.output_dir:
@@ -68,7 +80,6 @@ def main(cfg: Config) -> None:
             )
             out = model.attribute(fmt_src, fmt_mt, step_scores=["unsupervised_qe_metrics_fn"], show_progress=False)[0]
             mt_tokens, out_metrics = get_mt_tokens_and_metrics(out, model)
-            metric_names = get_metric_names(model)
             assert len(metric_names) == out_metrics.shape[1], (
                 f"Expected {len(metric_names)} metrics, but got {out_metrics.shape[1]} instead."
             )
@@ -115,6 +126,7 @@ if __name__ == "__main__":
     parser.add_argument("--src_lang", type=str, help="Source language", default=None)
     parser.add_argument("--tgt_lang", type=str, help="Target language", default=None)
     parser.add_argument("--output_dir", type=str, help="Output directory", default="outputs")
+    parser.add_argument("--use_heavy_function", action="store_true", help="Use heavy function")
     args = parser.parse_args()
     cfg = Config.from_args(args)
     main(cfg)

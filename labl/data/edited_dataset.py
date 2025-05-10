@@ -8,6 +8,7 @@ from transformers.utils.import_utils import is_pandas_available
 
 from labl.data.base_sequence import BaseLabeledDataset
 from labl.data.edited_entry import EditedEntry, MultiEditEntry
+from labl.utils.aggregation import LabelAggregation, label_sum_aggregation
 from labl.utils.tokenizer import Tokenizer, get_tokenizer
 from labl.utils.typing import InfoDictType, LabelType
 
@@ -197,4 +198,26 @@ class EditedDataset(BaseLabeledDataset[EditedEntry]):
         for entry in self:
             cast(EditedEntry | MultiEditEntry, entry).merge_gap_annotations(
                 merge_fn=merge_fn, keep_final_gap=keep_final_gap
+            )
+
+    def retokenize(
+        self,
+        tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
+        tokenizer_kwargs: dict = {},
+        label_aggregation_fn: LabelAggregation = label_sum_aggregation,
+    ) -> None:
+        """Retokenize the entries in the dataset using a new tokenizer.
+
+        Args:
+            tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A `Tokenizer`
+                used for tokenization. Supports initialization from a `transformers.PreTrainedTokenizer`, and uses
+                whitespace tokenization by default.
+            tokenizer_kwargs (dict): Additional arguments for the tokenizer.
+            label_aggregation_fn (LabelAggregation): A function to aggregate labels when retokenizing.
+                Defaults to `label_sum_aggregation`.
+        """
+        tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
+        for entry in self:
+            cast(EditedEntry | MultiEditEntry, entry).retokenize(
+                tokenizer=tokenizer, label_aggregation_fn=label_aggregation_fn
             )

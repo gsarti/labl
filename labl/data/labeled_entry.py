@@ -11,6 +11,7 @@ from transformers.tokenization_utils_fast import PreTrainedTokenizerFast
 
 from labl.data.base_entry import BaseLabeledEntry
 from labl.data.base_sequence import BaseMultiLabelEntry
+from labl.utils.aggregation import LabelAggregation, label_sum_aggregation
 from labl.utils.span import Span, SpanList
 from labl.utils.token import LabeledToken, LabeledTokenList
 from labl.utils.tokenizer import Tokenizer, WhitespaceTokenizer, get_tokenizer
@@ -180,6 +181,7 @@ class LabeledEntry(BaseLabeledEntry):
         tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
         tokenizer_kwargs: dict = {},
         info: InfoDictType = {},
+        label_aggregation_fn: LabelAggregation = label_sum_aggregation,
     ) -> "LabeledEntry":
         """Create a `LabeledEntry` from a text and a list of spans.
 
@@ -195,10 +197,13 @@ class LabeledEntry(BaseLabeledEntry):
             tokenizer_kwargs (dict): Additional arguments for the tokenizer.
             info (dict[str, str | int | float | bool]):
                 A dictionary containing additional information about the entry.
+            label_aggregation_fn (LabelAggregation): A function to aggregate labels for overlapping spans.
         """
         tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
         spans = Span.from_list(spans)
-        tokens, tokens_labels, tokens_offsets = cls.get_tokens_from_spans(text=text, spans=spans, tokenizer=tokenizer)
+        tokens, tokens_labels, tokens_offsets = cls.get_tokens_from_spans(
+            text=text, spans=spans, tokenizer=tokenizer, label_aggregation_fn=label_aggregation_fn
+        )
         tagged = cls.get_tagged_from_spans(text=text, spans=spans)
         return cls(
             text=text,
@@ -220,6 +225,7 @@ class LabeledEntry(BaseLabeledEntry):
         ignore_tags: list[str] = [],
         tokenizer_kwargs: dict = {},
         info: InfoDictType = {},
+        label_aggregation_fn: LabelAggregation = label_sum_aggregation,
     ) -> "LabeledEntry":
         """Create a `LabeledEntry` from a tagged text.
 
@@ -237,10 +243,13 @@ class LabeledEntry(BaseLabeledEntry):
             tokenizer_kwargs (dict): Additional arguments for the tokenizer.
             info (dict[str, str | int | float | bool]):
                 A dictionary containing additional information about the entry.
+            label_aggregation_fn (LabelAggregation): A function to aggregate labels for overlapping spans.
         """
         tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
         text, spans = cls.get_text_and_spans_from_tagged(tagged=tagged, keep_tags=keep_tags, ignore_tags=ignore_tags)
-        tokens, tokens_labels, tokens_offsets = cls.get_tokens_from_spans(text=text, spans=spans, tokenizer=tokenizer)
+        tokens, tokens_labels, tokens_offsets = cls.get_tokens_from_spans(
+            text=text, spans=spans, tokenizer=tokenizer, label_aggregation_fn=label_aggregation_fn
+        )
         return cls(
             text=text,
             spans=spans,
@@ -355,7 +364,7 @@ class LabeledEntry(BaseLabeledEntry):
             if s.label:
                 start = s.start + offset
                 end = s.end + offset
-                label = s.label
+                label = round(s.label, 3) if isinstance(s.label, float) else s.label
                 tagged = f"{tagged[:start]}<{label}>{tagged[start:end]}</{label}>{tagged[end:]}"
 
                 # Update the offset for the next span
@@ -367,6 +376,7 @@ class LabeledEntry(BaseLabeledEntry):
         text: str,
         spans: list[Span],
         tokenizer: Tokenizer | None = None,
+        label_aggregation_fn: LabelAggregation = label_sum_aggregation,
     ) -> tuple[list[str], Sequence[LabelType], list[OffsetType]]:
         """Extracts tokens, labels and offsets from a text and a set of labeled spans.
 
@@ -375,6 +385,7 @@ class LabeledEntry(BaseLabeledEntry):
             spans (list[Span]): The spans to convert to tokens.
             tokenizer (Tokenizer | None): A `Tokenizer` used for text splitting. If not provided, whitespace
                 tokenization is used.
+            label_aggregation_fn (LabelAggregation): A function to aggregate labels for overlapping spans.
 
         Returns:
             A tuple `(tokens, tokens_labels, tokens_offsets)`, which are three lists of the same length containing
@@ -418,7 +429,7 @@ class LabeledEntry(BaseLabeledEntry):
                     if label is None:
                         label = span.label
                     else:
-                        label += span.label  # type: ignore
+                        label = label_aggregation_fn([label, span.label])
                 current_check_idx += 1  # Move to the next potentially overlapping span
             tokens_labels.append(label)
         return tokens, tokens_labels, tokens_offsets
@@ -567,10 +578,10 @@ class LabeledEntry(BaseLabeledEntry):
                 curr_span_label = None
                 curr_span_start = None
                 curr_span_end = None
-        if curr_span_label is not None and curr_span_start is not None and curr_span_end is not None:
-            spans.append(Span(start=curr_span_start, end=curr_span_end, label=curr_span_label))
-        for span in spans:
-            span.text = text[span.start : span.end]
+            if curr_span_label is not None and curr_span_start is not None and curr_span_end is not None:
+                spans.append(Span(start=curr_span_start, end=curr_span_end, label=curr_span_label))
+            for span in spans:
+                span.text = text[span.start : span.end]
         return spans
 
     ### Utility Functions ###
@@ -624,6 +635,29 @@ class LabeledEntry(BaseLabeledEntry):
             info=data["info"],
             constructor_key=cls.__constructor_key,
         )
+
+    def retokenize(
+        self,
+        tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
+        tokenizer_kwargs: dict = {},
+        label_aggregation_fn: LabelAggregation = label_sum_aggregation,
+    ) -> None:
+        """Retokenize the text using a different tokenizer.
+
+        Args:
+            tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A `Tokenizer`
+                used for tokenization. Supports initialization from a `transformers.PreTrainedTokenizer`, and uses
+                whitespace tokenization by default.
+            tokenizer_kwargs (dict): Additional arguments for the tokenizer.
+            label_aggregation_fn (LabelAggregation): A function to aggregate labels for overlapping spans.
+        """
+        tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
+        tokens, tokens_labels, tokens_offsets = self.get_tokens_from_spans(
+            text=self.text, spans=self.spans, tokenizer=tokenizer, label_aggregation_fn=label_aggregation_fn
+        )
+        self._tokens = tokens
+        self._tokens_labels = tokens_labels
+        self._tokens_offsets = tokens_offsets
 
     ### Helper Functions ###
 
@@ -680,3 +714,22 @@ class MultiLabelEntry(BaseMultiLabelEntry[LabeledEntry]):
         {entry._get_labeled_str()}
         """)
         return out_str.strip()
+
+    def retokenize(
+        self,
+        tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
+        tokenizer_kwargs: dict = {},
+        label_aggregation_fn: LabelAggregation = label_sum_aggregation,
+    ) -> None:
+        """Retokenize the text using a different tokenizer.
+
+        Args:
+            tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A `Tokenizer`
+                used for tokenization. Supports initialization from a `transformers.PreTrainedTokenizer`, and uses
+                whitespace tokenization by default.
+            tokenizer_kwargs (dict): Additional arguments for the tokenizer.
+            label_aggregation_fn (LabelAggregation): A function to aggregate labels for overlapping spans.
+        """
+        tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
+        for entry in self:
+            entry.retokenize(tokenizer, tokenizer_kwargs, label_aggregation_fn=label_aggregation_fn)

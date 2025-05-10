@@ -70,11 +70,17 @@ class LabeledTokenList(list[LabeledToken]):
     """Class for a list of `LabeledToken`, with custom visualization."""
 
     def __str__(self) -> str:
-        lengths = [max(len(str(t.t)), len(str(t.l))) if t.l is not None else len(str(t.t)) for t in self]
+        lengths = [
+            max(len(str(t.t)), len(str(round(t.l, 3) if isinstance(t.l, float) else t.l)))
+            if t.l is not None
+            else len(str(t.t))
+            for t in self
+        ]
         txt_toks = " ".join(f"{tok.t:>{tok_len}}" for tok, tok_len in zip(self, lengths, strict=True)) + "\n"
         txt_labels = (
             " ".join(
-                f"{tok.l if tok.l is not None else '':>{tok_len}}" for tok, tok_len in zip(self, lengths, strict=True)
+                f"{round(tok.l, 3) if isinstance(tok.l, float) else tok.l if tok.l is not None else '':>{tok_len}}"
+                for tok, tok_len in zip(self, lengths, strict=True)
             )
             + "\n"
         )

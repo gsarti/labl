@@ -1,11 +1,13 @@
 from collections.abc import Sequence
+from typing import cast
 
 from tqdm import tqdm
 from transformers.tokenization_utils import PreTrainedTokenizer
 from transformers.tokenization_utils_fast import PreTrainedTokenizerFast
 
 from labl.data.base_sequence import BaseLabeledDataset
-from labl.data.labeled_entry import LabeledEntry
+from labl.data.labeled_entry import LabeledEntry, MultiLabelEntry
+from labl.utils.aggregation import LabelAggregation, label_sum_aggregation
 from labl.utils.span import Span
 from labl.utils.tokenizer import Tokenizer, get_tokenizer
 from labl.utils.typing import InfoDictType, LabelType, OffsetType, SpanType
@@ -176,3 +178,25 @@ class LabeledDataset(BaseLabeledDataset[LabeledEntry]):
                 )
             ]
         )
+
+    def retokenize(
+        self,
+        tokenizer: str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None = None,
+        tokenizer_kwargs: dict = {},
+        label_aggregation_fn: LabelAggregation = label_sum_aggregation,
+    ) -> None:
+        """Retokenize the dataset using a new tokenizer.
+
+        Args:
+            tokenizer (str | Tokenizer | PreTrainedTokenizer | PreTrainedTokenizerFast | None): A `Tokenizer`
+                used for tokenization. Supports initialization from a `transformers.PreTrainedTokenizer`, and uses
+                whitespace tokenization by default.
+            tokenizer_kwargs (dict): Additional arguments for the tokenizer.
+            label_aggregation_fn (LabelAggregation): A function to aggregate labels when retokenizing.
+                Defaults to `label_sum_aggregation`.
+        """
+        tokenizer = get_tokenizer(tokenizer, tokenizer_kwargs)
+        for entry in self:
+            cast(LabeledEntry | MultiLabelEntry, entry).retokenize(
+                tokenizer=tokenizer, label_aggregation_fn=label_aggregation_fn
+            )
