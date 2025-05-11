@@ -45,11 +45,13 @@ class Config:
 
 def main(cfg: Config) -> None:
     model = load_model(
-        cfg.model_id, "dummy", tokenizer_kwargs=cfg.tokenizer_kwargs, model_kwargs={"attn_implementation": "eager"}
+        cfg.model_id,
+        "dummy",
+        tokenizer_kwargs=cfg.tokenizer_kwargs,
+        model_kwargs={"attn_implementation": "eager", "torch_dtype": torch.bfloat16},
     )  # type: ignore
     cast(FeatureAttribution, model.attribution_method).use_hidden_states = True
     model: HuggingfaceModel = cast(HuggingfaceModel, torch.compile(model))
-    metric_names = get_metric_names(model, is_heavy=cfg.use_heavy_function)
     if cfg.use_heavy_function:
         for param in model.parameters():
             param.requires_grad = True
@@ -80,6 +82,7 @@ def main(cfg: Config) -> None:
             )
             out = model.attribute(fmt_src, fmt_mt, step_scores=["unsupervised_qe_metrics_fn"], show_progress=False)[0]
             mt_tokens, out_metrics = get_mt_tokens_and_metrics(out, model)
+            metric_names = get_metric_names(model, is_heavy=cfg.use_heavy_function)
             assert len(metric_names) == out_metrics.shape[1], (
                 f"Expected {len(metric_names)} metrics, but got {out_metrics.shape[1]} instead."
             )
