@@ -6,7 +6,6 @@ from inseq.utils.typing import SingleScorePerStepTensor
 from torch.distributions import Categorical
 
 from .model_utils import (
-    get_blood_score,
     get_decoder_states,
     get_mcd_probs,
     get_num_layers,
@@ -30,7 +29,7 @@ def unsupervised_qe_metrics_fn(
     ll_entropy_per_layer = []
     ll_logprob_per_layer = []
     ll_kl_div_per_layer = []
-    blood_per_layer = []
+    # blood_per_layer = []
     logit_lens_prediction_ranks = []
     num_layers = len(all_layer_states)
     for layer_idx, layer_states in enumerate(all_layer_states):
@@ -52,10 +51,10 @@ def unsupervised_qe_metrics_fn(
         ll_kl_div_per_layer.append(ll_kl_div)
 
         # blood
-        if layer_idx < num_layers - 1:
-            next_layer_states = all_layer_states[layer_idx + 1]
-            blood_score = get_blood_score(layer_states, next_layer_states, n_estimators=blood_n_estimators)
-            blood_per_layer.append(blood_score.item())
+        # if layer_idx < num_layers - 1:
+        #     next_layer_states = all_layer_states[layer_idx + 1]
+        #     blood_score = get_blood_score(layer_states, next_layer_states, n_estimators=blood_n_estimators)
+        #     blood_per_layer.append(blood_score.item())
 
     # mcd_logprob_avg and mcd_logprob_var
     mcd_logprobs = get_mcd_probs(args, mcd_n_steps, logprob=mcd_logprob)
@@ -78,7 +77,7 @@ def unsupervised_qe_metrics_fn(
             ll_logprob_per_layer
             + ll_entropy_per_layer
             + ll_kl_div_per_layer
-            + blood_per_layer
+            # + blood_per_layer
             + [
                 mcd_logprob_avg,
                 mcd_logprob_var,
@@ -157,7 +156,7 @@ def get_metric_names(model: AttributionModel, is_heavy: bool = True) -> list[str
     metric_names += [f"logit_lens_entropy_layer_{i}" for i in range(n_layers + 1)]
     metric_names += [f"logit_lens_kl_div_layer_{i}" for i in range(n_layers + 1)]
     if is_heavy:
-        metric_names += [f"blood_layer_{i}" for i in range(n_layers)]
+        # metric_names += [f"blood_layer_{i}" for i in range(n_layers)]
         metric_names += ["mcd_logprob_mean", "mcd_logprob_var"]
     return metric_names + [
         "logprob",
