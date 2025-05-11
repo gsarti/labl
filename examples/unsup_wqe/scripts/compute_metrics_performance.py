@@ -266,6 +266,8 @@ if __name__ == "__main__":
             # "{dataset_name}_xcomet_lite_{lang}.json", # Omitted since it does not output word-level error spans
             "{dataset_name}_xcomet_xl_{lang}.json",
             "{dataset_name}_xcomet_xxl_{lang}.json",
+            "{dataset_name}_xcomet_xl_cont_{lang}.json",
+            "{dataset_name}_xcomet_xxl_cont_{lang}.json",
         ],
     )
     parser.add_argument(

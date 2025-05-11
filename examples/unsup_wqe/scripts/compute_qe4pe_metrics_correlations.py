@@ -24,6 +24,8 @@ class Config:
             # "qe4pe_xcomet_lite_{lang}.json", # Omitted since it does not output word-level error spans
             "qe4pe_xcomet_xl_{lang}.json",
             "qe4pe_xcomet_xxl_{lang}.json",
+            "qe4pe_xcomet_xl_cont_{lang}.json",
+            "qe4pe_xcomet_xxl_cont_{lang}.json",
         ]
     )
     output_fname: str = "qe4pe_metrics_correlations.json"
