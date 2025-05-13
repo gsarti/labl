@@ -40,7 +40,7 @@ def get_labl_tokenizer(dataset_name: str, lang: str) -> Tokenizer:
             },
         )
     elif dataset_name == "wmt24esa":
-        return get_tokenizer("CohereLabs/aya-23-35B", tokenizer_kwargs={"add_special_tokens": True})
+        return get_tokenizer("CohereLabs/aya-23-35B", tokenizer_kwargs={"add_special_tokens": False})
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
@@ -125,6 +125,7 @@ def build_metrics_dataset(
     tokenizer: Tokenizer | None = None,
     reverse_sign_match: list[str] = ["logprob", "mcd_logprob_mean"],
     reverse_sign_startswith: list[str] = ["logit_lens_logprob_layer"],
+    exclude_unsup_metrics: list[str] = [],
 ) -> dict[str, LabeledDataset]:
     """Builds a dictionary of metrics datasets from the given filenames"""
     # Build metrics labeled datasets
@@ -134,6 +135,8 @@ def build_metrics_dataset(
             data = json.load(f)["data"]
         unsupervised_metrics: list[str] = [k for k in data[0].keys() if k not in ["src", "mt", "mt_tokens"]]
         for metric in tqdm(unsupervised_metrics, desc="Loading unsup. metrics", total=len(unsupervised_metrics)):
+            if metric in exclude_unsup_metrics:
+                continue
             metrics_datasets[metric] = LabeledDataset.from_tokens(
                 texts=[entry["mt"] for entry in data],
                 tokens=[entry["mt_tokens"] for entry in data],

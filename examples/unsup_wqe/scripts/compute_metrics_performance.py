@@ -39,6 +39,7 @@ class Config:
     unsup_metrics_fname: str = "{dataset_name}_unsupervised_metrics_{lang}.json"
     sup_metrics_fnames: list[str] = field(default_factory=lambda: [])
     num_random_baselines: int = 10
+    exclude_unsup_metrics: list[str] = field(default_factory=lambda: [])
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> "Config":
@@ -53,6 +54,7 @@ class Config:
             unsup_metrics_fname=args.unsup_metrics_fname,
             sup_metrics_fnames=args.sup_metrics_fnames,
             num_random_baselines=args.num_random_baselines,
+            exclude_unsup_metrics=args.exclude_unsup_metrics,
         )
         return cfg
 
@@ -139,6 +141,7 @@ def main(cfg: Config) -> None:
             dataset_name=cfg.dataset_name,
             lang=lang,
             tokenizer=tokenizer,
+            exclude_unsup_metrics=cfg.exclude_unsup_metrics,
         )
         if num_annotators > 1:
             for metric, metric_data in metrics_datasets.items():
@@ -269,6 +272,13 @@ if __name__ == "__main__":
             "{dataset_name}_xcomet_xl_cont_{lang}.json",
             "{dataset_name}_xcomet_xxl_cont_{lang}.json",
         ],
+    )
+    parser.add_argument(
+        "--exclude_unsup_metrics",
+        type=str,
+        nargs="+",
+        help="List of unsupervised metrics to exclude",
+        default=[],
     )
     parser.add_argument(
         "--num_random_baselines",
