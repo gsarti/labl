@@ -122,14 +122,20 @@ def function(arg1: str, arg2: int = 42) -> bool:
 
 ### Type Annotations
 
-Type annotations are required for all function parameters, return values, and class attributes. The project uses standard Python typing.
+Type annotations are required for all function parameters, return values, and class attributes. The project uses native type annotations supported in Python 3.10+ where possible, rather than importing from the `typing` module.
 
 ```python
-from typing import Any, List, Optional, Dict
+# Preferred (using native Python 3.10+ syntax)
+def process_data(data: list[str], config: dict[str, object] | None = None) -> bool:
+    ...
 
+# Instead of (older style)
+from typing import Any, List, Optional, Dict
 def process_data(data: List[str], config: Optional[Dict[str, Any]] = None) -> bool:
     ...
 ```
+
+Only import from `typing` module when necessary for special types not available natively (e.g., `TypeVar`, `Protocol`, `Callable`, etc.).
 
 ## Testing
 
